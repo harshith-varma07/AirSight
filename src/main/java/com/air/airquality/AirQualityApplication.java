@@ -1,13 +1,10 @@
-package com.air.demo;
-
+package com.air.airquality;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
 @SpringBootApplication
-public class DemoApplication {
+public class AirQualityApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(DemoApplication.class, args);
+		SpringApplication.run(AirQualityApplication.class, args);
 	}
-
 }
