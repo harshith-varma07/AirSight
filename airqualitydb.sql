@@ -1,0 +1,1 @@
+create database air_quality_db; 
