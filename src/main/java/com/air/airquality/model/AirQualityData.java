@@ -9,15 +9,15 @@ public class AirQualityData {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String location;
+    private String city;
     private String parameter;
     private double value;
     private String unit;
     private LocalDateTime timestamp;
     public AirQualityData() {
     }
-    public AirQualityData(String location, String parameter, double value, String unit, LocalDateTime timestamp) {
-        this.location = location;
+    public AirQualityData(String city, String parameter, double value, String unit, LocalDateTime timestamp) {
+        this.city = city;
         this.parameter = parameter;
         this.value = value;
         this.unit = unit;
@@ -29,11 +29,11 @@ public class AirQualityData {
     public void setId(Long id) {
         this.id = id;
     }
-    public String getLocation() {
-        return location;
+    public String getCity() {
+        return city;
     }
-    public void setLocation(String location) {
-        this.location = location;
+    public void setCity(String city) {
+        this.city = city;
     }
     public String getParameter() {
         return parameter;

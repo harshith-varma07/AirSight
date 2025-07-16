@@ -1,44 +1,45 @@
 package com.air.airquality.services;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.util.EntityUtils;
-import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import java.io.IOException;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONObject;
+
 @Service
 public class SmsService {
 
     @Value("${fast2sms.api.key}")
     private String apiKey;
 
-    public void sendSms(String phoneNumber, String message) throws IOException {
-        String url = "https://www.fast2sms.com/dev/bulkV2";
+    public void sendSms(String phoneNumber, String messageText) {
+        try {
+            String apiUrl = "https://www.fast2sms.com/dev/bulkV2";
+            CloseableHttpClient client = HttpClients.createDefault();
+            HttpPost post = new HttpPost(apiUrl);
 
-        HttpClient client = HttpClientBuilder.create().build();
-        HttpPost post = new HttpPost(url);
+            JSONObject body = new JSONObject();
+            body.put("route", "q"); // quick transactional
+            body.put("sender_id", "FSTSMS");
+            body.put("message", messageText);
+            body.put("language", "english");
+            body.put("flash", 0);
+            body.put("numbers", phoneNumber); // comma-separated if multiple
 
-        // Set headers
-        post.setHeader("authorization", apiKey);
-        post.setHeader("Content-Type", "application/json");
+            post.setHeader("authorization", apiKey);
+            post.setHeader("Content-Type", "application/json");
+            post.setEntity(new StringEntity(body.toString()));
 
-        // Set body
-        JSONObject body = new JSONObject();
-        body.put("route", "q"); // For quick transactional SMS
-        body.put("sender_id", "FSTSMS");
-        body.put("message", message);
-        body.put("language", "english");
-        body.put("flash", 0);
-        body.put("numbers", phoneNumber); // comma-separated numbers if needed
+            HttpResponse response = client.execute(post);
+            String result = EntityUtils.toString(response.getEntity());
+            System.out.println("📩 SMS Sent! Response: " + result);
 
-        post.setEntity(new StringEntity(body.toString(), ContentType.APPLICATION_JSON));
-
-        HttpResponse response = client.execute(post);
-        String result = EntityUtils.toString(response.getEntity());
-        System.out.println("SMS Response: " + result);
+            client.close();
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send SMS: " + e.getMessage());
+        }
     }
 }

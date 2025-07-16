@@ -8,7 +8,7 @@ import jakarta.persistence.Column;
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private String phoneNumber;
+    private Long phoneNumber;
     @Column(nullable = false, unique = true)
     private String username;
     @Column(nullable = false)
@@ -16,18 +16,18 @@ public class User {
     // Constructors
     public User() {}
 
-    public User(String phoneNumber, String username, String password) {
+    public User(Long phoneNumber, String username, String password) {
         this.phoneNumber = phoneNumber;
         this.username=username;
         this.password = password;
     }
 
     // Getters and Setters
-    public String getPhoneNumber() {
+    public Long getPhoneNumber() {
         return phoneNumber;
     }
 
-    public void setPhoneNumber(String phoneNumber) {
+    public void setPhoneNumber(Long phoneNumber) {
         this.phoneNumber = phoneNumber;
     }
 

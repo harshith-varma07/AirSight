@@ -5,7 +5,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 @Repository
 public interface AirQualityRepository extends JpaRepository<AirQualityData, Long> {
-    List<AirQualityData> findByLocation(String location);
-    List<AirQualityData> findTop10ByLocationOrderByTimestampDesc(String location);
+    List<AirQualityData> findByCity(String city);
+    List<AirQualityData> findTop10ByCityOrderByTimestampDesc(String city);
     List<AirQualityData> findTop10ByOrderByTimestampDesc();
 }

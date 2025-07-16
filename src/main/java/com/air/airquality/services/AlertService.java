@@ -1,26 +1,17 @@
 package com.air.airquality.services;
 import com.air.airquality.model.AirQualityData;
-import com.air.airquality.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.io.IOException;
 @Service
 public class AlertService {
     @Autowired
     private SmsService smsService;
-    @Autowired
-    private UserRepository userrepository; // Assuming User is a singleton or managed bean
-    public void checkAndAlert(AirQualityData data) {
-        try {
-            if (data.getValue() > 150) {
-                String message = "⚠️ High AQI Alert in " + data.getLocation() + ": AQI = " + data.getValue();
-                String num= userrepository.findByUsername("admin")
-                        .orElseThrow(() -> new RuntimeException("Admin user not found"))
-                        .getPhoneNumber(); // Assuming User has a getPhoneNumber method
-                smsService.sendSms(num, message); // Replace with real number
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+    private static final double AQI_THRESHOLD = 150;
+    public void checkAndSendAlert(AirQualityData data) {
+        if (data.getValue() > AQI_THRESHOLD) {
+            String message = "⚠️ High AQI Alert!\nCity: " + data.getCity() +
+                    "\nPM2.5: " + data.getValue() + " " + data.getUnit();
+            smsService.sendSms("91XXXXXXXXXX", message); // Replace with actual number
         }
     }
 }
