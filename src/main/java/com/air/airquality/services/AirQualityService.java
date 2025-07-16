@@ -51,8 +51,8 @@ public class AirQualityService {
             System.err.println("❌ Failed to fetch AQI data.");
         }
     }
-    public List<AirQualityData> getLatest(String location) {
-        return airQualityRepository.findTop10ByLocationOrderByTimestampDesc(location);
+    public List<AirQualityData> getLatest(String city) {
+        return airQualityRepository.findTop10ByCityOrderByTimestampDesc(city);
     }
     public void saveData(AirQualityData data) {
         airQualityRepository.save(data);

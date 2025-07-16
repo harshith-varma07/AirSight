@@ -1,1 +1,1 @@
-create database air_quality_db; 
+create database airsight; 
