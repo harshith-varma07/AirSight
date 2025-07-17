@@ -16,12 +16,6 @@ public class AirQualityController {
 
     @Autowired
     private AirQualityRepository airRepo;
-
-    @GetMapping("/{location}/latest")
-    public List<AirQualityData> getByLocation(@PathVariable String location) {
-        return service.getLatest(location);
-    }
-
     @PostMapping("/add")
     public void addData(@RequestBody AirQualityData data) {
         service.saveData(data);
@@ -31,6 +25,10 @@ public class AirQualityController {
     public ResponseEntity<List<AirQualityData>> getHistoricalAQI(@PathVariable String city) {
         List<AirQualityData> list = airRepo.findTop10ByCityOrderByTimestampDesc(city);
         return ResponseEntity.ok(list);
+    }
+    @GetMapping("/{city}")
+    public List<AirQualityData> getLatestAQI(@PathVariable String city) {
+        return service.getLatest(city);
     }
 
 }
