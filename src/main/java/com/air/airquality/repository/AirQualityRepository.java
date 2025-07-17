@@ -8,4 +8,5 @@ public interface AirQualityRepository extends JpaRepository<AirQualityData, Long
     List<AirQualityData> findByCity(String city);
     List<AirQualityData> findTop10ByCityOrderByTimestampDesc(String city);
     List<AirQualityData> findTop10ByOrderByTimestampDesc();
+    List<AirQualityData> findTop30ByCityOrderByTimestampDesc(String city);
 }

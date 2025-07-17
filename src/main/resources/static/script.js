@@ -1,10 +1,31 @@
 let token = localStorage.getItem("token");
-window.onload = function() {
+window.onload = function () {
   if (token) {
     document.getElementById("userSection").style.display = "block";
-    loadHistoryChart(); // Only for logged-in users
+    loadHistoryChart();
   }
 };
+function login() {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+        window.location.href = "dashboard.html";
+      } else {
+        document.getElementById("error").innerText = "Login failed";
+      }
+    })
+    .catch(() => {
+      document.getElementById("error").innerText = "Server error";
+    });
+}
 function fetchAQI() {
   const city = document.getElementById("city").value;
   fetch(`/api/air/${city}`)
@@ -16,39 +37,80 @@ function fetchAQI() {
           `<h3>City: ${latest.city}</h3>
            <p>AQI: ${latest.value} ${latest.unit}</p>
            <p>Time: ${latest.timestamp}</p>`;
+        if (token) {
+          loadHistoryChart();
+        }
       } else {
-        document.getElementById("aqiDisplay").innerText = "No data available";
+        document.getElementById("aqiDisplay").innerText = "No AQI data available.";
       }
+    })
+    .catch(() => {
+      document.getElementById("aqiDisplay").innerText = "Error fetching data.";
     });
 }
 function loadHistoryChart() {
   const city = document.getElementById("city").value || "Delhi";
   fetch(`/api/air/history/${city}`, {
-    headers: { Authorization: "Bearer " + token }
+    headers: {
+      Authorization: "Bearer " + token
+    }
   })
     .then(res => res.json())
     .then(data => {
-      const labels = data.map(d => d.timestamp.split("T")[0]);
-      const values = data.map(d => d.value);
+      if (!data || data.length === 0) {
+        document.getElementById("userSection").innerHTML += "<p>No chart data available.</p>";
+        return;
+      }
+      const reversed = data.reverse();
+      const labels = reversed.map(item => item.timestamp.split("T")[0]);
+      const values = reversed.map(item => item.value);
       const ctx = document.getElementById("chartCanvas").getContext("2d");
       new Chart(ctx, {
         type: "line",
         data: {
           labels: labels,
           datasets: [{
-            label: "PM2.5",
+            label: "PM2.5 AQI",
             data: values,
-            borderColor: "blue",
-            fill: false
+            fill: false,
+            borderColor: "green",
+            tension: 0.3
           }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
         }
       });
     })
     .catch(() => {
-      document.getElementById("userSection").innerHTML = "<p>Unauthorized. Please login.</p>";
+      document.getElementById("userSection").innerHTML += "<p>Login required to view chart.</p>";
     });
 }
 function downloadPdf() {
   const city = document.getElementById("city").value;
-  window.open(`/api/report/pdf?city=${city}&token=${token}`, '_blank');
+  if (!token) {
+    alert("Login required to download report.");
+    return;
+  }
+  fetch(`/api/report/pdf?city=${city}`, {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  })
+    .then(res => res.blob())
+    .then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AQI_Report_${city}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    })
+    .catch(() => alert("Failed to download report."));
 }
