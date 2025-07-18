@@ -26,20 +26,18 @@ function login() {
       document.getElementById("error").innerText = "Server error";
     });
 }
+// Example: Fetch and display all parameters for a city
 function fetchAQI() {
   const city = document.getElementById("city").value;
   fetch(`/api/air/${city}`)
     .then(res => res.json())
     .then(data => {
       if (data.length > 0) {
-        const latest = data[0];
-        document.getElementById("aqiDisplay").innerHTML =
-          `<h3>City: ${latest.city}</h3>
-           <p>AQI: ${latest.value} ${latest.unit}</p>
-           <p>Time: ${latest.timestamp}</p>`;
-        if (token) {
-          loadHistoryChart();
-        }
+        let html = `<h3>City: ${city}</h3>`;
+        data.forEach(item => {
+          html += `<p>${item.parameter.toUpperCase()}: ${item.value} ${item.unit} (at ${item.timestamp})</p>`;
+        });
+        document.getElementById("aqiDisplay").innerHTML = html;
       } else {
         document.getElementById("aqiDisplay").innerText = "No AQI data available.";
       }

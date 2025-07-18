@@ -23,8 +23,8 @@ public class ReportController {
 
     @GetMapping("/pdf")
     public ResponseEntity<InputStreamResource> downloadPdf(@RequestParam String city) throws DocumentException {
-        // Make sure this method exists in your repository!
-        List<AirQualityData> dataList = airRepo.findTop30ByCityOrderByTimestampDesc(city);
+        // Fetch all parameters for the city
+        List<AirQualityData> dataList = airRepo.findByCity(city);
 
         ByteArrayInputStream bis = pdfService.generateAQIReport(dataList, city);
 
