@@ -1,3 +1,27 @@
+document.addEventListener("DOMContentLoaded", function() {
+  const loginForm = document.getElementById("loginForm");
+  if (loginForm) {
+    loginForm.addEventListener("submit", function(event) {
+      event.preventDefault();
+      login();
+    });
+  }
+
+  const aqiForm = document.getElementById("aqiForm");
+  if (aqiForm) {
+    aqiForm.addEventListener("submit", function(event) {
+      event.preventDefault();
+      fetchAQI();
+    });
+  }
+
+  const downloadPdfBtn = document.getElementById("downloadPdfBtn");
+  if (downloadPdfBtn) {
+    downloadPdfBtn.addEventListener("click", function() {
+      downloadPdf();
+    });
+  }
+});
 let token = localStorage.getItem("token");
 window.onload = function () {
   if (token) {

@@ -1,25 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Dashboard - AirSight</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSight - Air Quality Monitor</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h2>Air Quality Dashboard</h2>
-  <div>
-    <input type="text" id="city" placeholder="Enter city">
-    <button onclick="fetchAQI()">Fetch Latest AQI</button>
-    <div id="aqiDisplay" class="card"></div>
-  </div>
-  <div id="userSection" style="display:none;">
-    <h3>Historical AQI</h3>
-    <canvas id="chartCanvas" width="400" height="200"></canvas>
-    <button onclick="downloadPdf()">Download PDF Report</button>
-  </div>
-
-  <p><a href="index.html">Login to unlock full access</a></p>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="script.js"></script>
+    <header>
+        <h1>AirSight</h1>
+    </header>
+    <main>
+        <div class="card">
+            <h2>Live AQI (New York)</h2>
+            <p class="live-aqi" id="live-aqi-value">Connecting...</p>
+        </div>
+        <div class="card">
+            <h2>Historical Data</h2>
+            <canvas id="aqiChart"></canvas>
+        </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSight - Login</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Login to AirSight</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+        <p id="loginMessage" class="error-message"></p>
+        <p>Don't have an account? <a href="register.html">Register here</a></p>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>

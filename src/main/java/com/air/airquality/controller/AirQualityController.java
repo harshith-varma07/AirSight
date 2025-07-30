@@ -12,22 +12,28 @@ public class AirQualityController {
     @Autowired
     private AirQualityService service;
 
-    // Fetch and store latest data for a city (triggered by user)
     @PostMapping("/fetch/{city}")
     public String fetchForCity(@PathVariable String city) {
         service.fetchAQIDataForCity(city);
         return "Data fetched for " + city;
     }
 
-    // Get all latest data for a city
     @GetMapping("/{city}")
     public List<AirQualityData> getLatestForCity(@PathVariable String city) {
         return service.getLatestForCity(city);
     }
 
-    // Get latest data for a city and parameter
     @GetMapping("/{city}/{parameter}")
     public List<AirQualityData> getLatestForCityAndParameter(@PathVariable String city, @PathVariable String parameter) {
         return service.getLatestForCityAndParameter(city, parameter);
+    }
+    private final AqiReadingRepository aqiReadingRepository;
+
+    public AqiController(AqiReadingRepository aqiReadingRepository) {
+        this.aqiReadingRepository = aqiReadingRepository;
+    }
+    @GetMapping("/history")
+    public List<AqiReading> getHistoricalData() {
+        return aqiReadingRepository.findAll();
     }
 }
