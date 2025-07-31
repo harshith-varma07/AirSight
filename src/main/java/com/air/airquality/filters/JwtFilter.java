@@ -1,6 +1,6 @@
 package com.air.airquality.filters;
 
-import com.air.airquality.services.CustomUserDetailsService;
+import com.air.airquality.services.UserService;
 import com.air.airquality.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,8 +18,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtil jwtUtil;
-    @Autowired
-    private CustomUserDetailsService userDetailsService;
+    @Autowired // Changed from userDetailsService to userService
+    private UserService userService;
 
     @Override
     protected void doFilterInternal(@org.springframework.lang.NonNull HttpServletRequest request,
@@ -36,7 +36,11 @@ public class JwtFilter extends OncePerRequestFilter {
         }
         // Validate token and set authentication
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            UserDetails userDetails = userService.loadUserByUsername(username);
+
+            if(userDetails == null){
+                filterChain.doFilter(request, response);
+            }
             if (jwtUtil.validateToken(jwt, userDetails)) {
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());

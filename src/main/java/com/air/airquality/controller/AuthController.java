@@ -1,41 +1,89 @@
 package com.air.airquality.controller;
+
+import com.air.airquality.dto.LoginRequest;
+import com.air.airquality.dto.UserRegistrationRequest;
 import com.air.airquality.model.User;
-import com.air.airquality.repository.UserRepository;
-import com.air.airquality.util.JwtUtil;
+import com.air.airquality.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "*")
 public class AuthController {
+    
     @Autowired
-    private AuthenticationManager authenticationManager;
-    @Autowired
-    private JwtUtil jwtUtil;
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private PasswordEncoder encoder;
+    private UserService userService;
+    
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody User user) {
-        if (userRepository.findByUsername(user.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Username already taken");
+    public ResponseEntity<?> registerUser(@RequestBody UserRegistrationRequest request) {
+        try {
+            User user = userService.registerUser(request);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User registered successfully");
+            response.put("userId", user.getId());
+            response.put("username", user.getUsername());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-        user.setPassword(encoder.encode(user.getPassword()));
-        userRepository.save(user);
-        return ResponseEntity.ok("User registered");
     }
+    
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestBody User loginData) {
-        authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(loginData.getUsername(), loginData.getPassword()));
-
-        String token = jwtUtil.generateToken(loginData.getUsername());
-        return ResponseEntity.ok(Collections.singletonMap("token", token));
+    public ResponseEntity<?> loginUser(@RequestBody LoginRequest request) {
+        try {
+            User user = userService.authenticateUser(request.getUsername(), request.getPassword());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Login successful");
+            response.put("userId", user.getId());
+            response.put("username", user.getUsername());
+            response.put("email", user.getEmail());
+            response.put("city", user.getCity());
+            response.put("alertThreshold", user.getAlertThreshold());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+    }
+    
+    @PutMapping("/update/{userId}")
+    public ResponseEntity<?> updateUser(@PathVariable Long userId, @RequestBody User updatedUser) {
+        try {
+            User user = userService.updateUser(userId, updatedUser);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User updated successfully");
+            response.put("user", user);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
     }
 }

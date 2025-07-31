@@ -12,7 +12,7 @@ public class JwtUtil {
                 .setSubject(username)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10)) // 10 hrs
-                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)(SignatureAlgorithm.HS256, SECRET_KEY)
                 .compact();
     }
     // Extract username from JWT
