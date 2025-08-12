@@ -708,7 +708,7 @@
                         <small>1 hour ago</small>
                     </div>
                 </div>
-                <button class="btn-primary" onclick="openModal('alertModal')" style="margin-top: 1rem;">
+                <button class="btn-primary" onclick="setAlert()" style="margin-top: 1rem;">
                     <i class="fas fa-plus"></i> Set New Alert
                 </button>
             </div>
@@ -732,7 +732,46 @@
                 <button type="submit" class="btn-primary">Login</button>
             </form>
             <p style="text-align: center; margin-top: 1rem;">
-                Don't have an account? <a href="#" style="color: var(--neon-blue);">Sign up</a>
+                Don't have an account? <a href="#" style="color: var(--neon-blue);" onclick="closeModal('loginModal'); openModal('registerModal')">Sign up</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Registration Modal -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <button class="close" onclick="closeModal('registerModal')">&times;</button>
+            <h2>Register for AirSight Pro</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="regUsername" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="regEmail" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="regPassword" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel" class="form-input" id="regPhone" placeholder="+1234567890">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">City</label>
+                    <input type="text" class="form-input" id="regCity" placeholder="Your city for alerts">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Alert Threshold (AQI)</label>
+                    <input type="number" class="form-input" id="regThreshold" value="100" min="0" max="500">
+                    <small style="color: var(--text-secondary);">Get alerts when AQI exceeds this value</small>
+                </div>
+                <button type="submit" class="btn-primary">Create Account</button>
+            </form>
+            <p style="text-align: center; margin-top: 1rem;">
+                Already have an account? <a href="#" style="color: var(--neon-blue);" onclick="closeModal('registerModal'); openModal('loginModal')">Sign in</a>
             </p>
         </div>
     </div>
@@ -748,14 +787,11 @@
                     <input type="text" class="form-input" id="alertCity" placeholder="Enter city name" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Country</label>
-                    <input type="text" class="form-input" id="alertCountry" placeholder="Enter country code (e.g., IN)" required>
-                </div>
-                <div class="form-group">
                     <label class="form-label">AQI Threshold</label>
                     <input type="number" class="form-input" id="alertThreshold" placeholder="e.g., 150" min="0" max="500" required>
+                    <small style="color: var(--text-secondary);">Get SMS alerts when AQI exceeds this value</small>
                 </div>
-                <button type="submit" class="btn-primary">Create Alert</button>
+                <button type="submit" class="btn-primary">Update Alert Settings</button>
             </form>
         </div>
     </div>
@@ -769,6 +805,19 @@
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             createParticles();
+            
+            // Check for existing user session
+            const savedUser = localStorage.getItem('airSightUser');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    isLoggedIn = true;
+                    updateNavbarForLoggedInUser();
+                } catch (e) {
+                    localStorage.removeItem('airSightUser');
+                }
+            }
+            
             loadDashboardData();
             setInterval(loadDashboardData, 300000); // Update every 5 minutes
         });
@@ -798,22 +847,59 @@
             showLoading(true);
             
             try {
-                // Simulate API calls (replace with actual API endpoints)
-                const cities = [
-                    { name: 'Delhi', country: 'India', aqi: 152, category: 'Moderate', coordinates: [28.6139, 77.2090] },
-                    { name: 'Mumbai', country: 'India', aqi: 89, category: 'Moderate', coordinates: [19.0760, 72.8777] },
-                    { name: 'Chennai', country: 'India', aqi: 67, category: 'Good', coordinates: [13.0827, 80.2707] },
-                    { name: 'Beijing', country: 'China', aqi: 201, category: 'Very Unhealthy', coordinates: [39.9042, 116.4074] },
-                    { name: 'London', country: 'UK', aqi: 45, category: 'Good', coordinates: [51.5074, -0.1278] },
-                    { name: 'New York', country: 'USA', aqi: 78, category: 'Moderate', coordinates: [40.7128, -74.0060] }
-                ];
-
-                updateMainAQI(cities[0]);
-                updateCityList(cities);
-                updateParameters();
+                // Load available cities first
+                const citiesResponse = await fetch(`${API_BASE_URL}/aqi/cities`);
+                const citiesData = await citiesResponse.json();
+                
+                if (citiesData.success && citiesData.cities && citiesData.cities.length > 0) {
+                    // Get AQI data for multiple cities
+                    const topCities = citiesData.cities.slice(0, 6); // Get top 6 cities
+                    const multiResponse = await fetch(`${API_BASE_URL}/aqi/multiple?${topCities.map(city => `cities=${encodeURIComponent(city)}`).join('&')}`);
+                    const multiData = await multiResponse.json();
+                    
+                    if (multiData.success && multiData.data) {
+                        const cities = Object.values(multiData.data).map(cityData => ({
+                            name: cityData.city,
+                            country: '',
+                            aqi: cityData.aqiValue,
+                            category: cityData.category,
+                            coordinates: [0, 0] // We don't have coordinates from backend
+                        }));
+                        
+                        // Update main AQI with first city
+                        if (cities.length > 0) {
+                            updateMainAQI(cities[0]);
+                        }
+                        
+                        updateCityList(cities);
+                        updateParameters(cities[0]); // Use first city's parameters
+                    }
+                } else {
+                    // Fallback to default cities if no cities in database
+                    const fallbackCities = [
+                        { name: 'Delhi', country: 'India', aqi: 152, category: 'Moderate', coordinates: [28.6139, 77.2090] },
+                        { name: 'Mumbai', country: 'India', aqi: 89, category: 'Moderate', coordinates: [19.0760, 72.8777] },
+                        { name: 'Chennai', country: 'India', aqi: 67, category: 'Good', coordinates: [13.0827, 80.2707] },
+                        { name: 'London', country: 'UK', aqi: 45, category: 'Good', coordinates: [51.5074, -0.1278] }
+                    ];
+                    
+                    updateMainAQI(fallbackCities[0]);
+                    updateCityList(fallbackCities);
+                    updateParameters(fallbackCities[0]);
+                }
                 
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
+                showNotification('Error loading dashboard data. Using fallback data.', 'error');
+                
+                // Use complete fallback
+                const fallbackCities = [
+                    { name: 'Delhi', country: 'India', aqi: 152, category: 'Moderate', coordinates: [28.6139, 77.2090] },
+                    { name: 'Mumbai', country: 'India', aqi: 89, category: 'Moderate', coordinates: [19.0760, 72.8777] }
+                ];
+                updateMainAQI(fallbackCities[0]);
+                updateCityList(fallbackCities);
+                updateParameters(fallbackCities[0]);
             } finally {
                 showLoading(false);
             }
@@ -866,7 +952,9 @@
         }
 
         // Update parameters display
-        function updateParameters() {
+        function updateParameters(cityData) {
+            // If we have city data with pollutant information, use it
+            // Otherwise use default parameters
             const parameters = [
                 { name: 'PM2.5', value: 45.2, unit: 'µg/m³', color: 'var(--neon-blue)' },
                 { name: 'PM10', value: 78.1, unit: 'µg/m³', color: 'var(--neon-green)' },
@@ -904,31 +992,100 @@
             showLoading(true);
             
             try {
-                // Simulate API call to search city
-                const response = await fetch(`${API_BASE_URL}/air-quality/search?city=${encodeURIComponent(cityName)}`);
+                // First try to search for the city
+                const response = await fetch(`${API_BASE_URL}/aqi/search?query=${encodeURIComponent(cityName)}`);
                 const data = await response.json();
                 
-                if (data && data.length > 0) {
-                    updateMainAQI(data[0]);
-                    showNotification('City data loaded successfully!', 'success');
+                if (data.success && data.currentData) {
+                    // Update main display with found city data
+                    updateMainAQI({
+                        name: data.currentData.city,
+                        country: '', // We don't have country info from backend
+                        aqi: data.currentData.aqiValue,
+                        category: data.currentData.category
+                    });
+                    showNotification(`Data loaded for ${data.currentData.city}!`, 'success');
+                } else if (data.success && data.cities && data.cities.length > 0) {
+                    // If we found matching cities, try to get data for the first one
+                    const firstCity = data.cities[0];
+                    const cityResponse = await fetch(`${API_BASE_URL}/aqi/current/${encodeURIComponent(firstCity)}`);
+                    const cityData = await cityResponse.json();
+                    
+                    if (cityData.success) {
+                        updateMainAQI({
+                            name: cityData.data.city,
+                            country: '',
+                            aqi: cityData.data.aqiValue,
+                            category: cityData.data.category
+                        });
+                        showNotification(`Data loaded for ${cityData.data.city}!`, 'success');
+                    }
                 } else {
-                    showNotification('City not found. Please try another city.', 'error');
+                    // Try to add the city to monitoring
+                    const addResponse = await fetch(`${API_BASE_URL}/aqi/cities/add?city=${encodeURIComponent(cityName)}`, {
+                        method: 'POST'
+                    });
+                    const addData = await addResponse.json();
+                    
+                    if (addData.success && addData.data) {
+                        updateMainAQI({
+                            name: addData.data.city,
+                            country: '',
+                            aqi: addData.data.aqiValue,
+                            category: addData.data.category
+                        });
+                        showNotification(`New city ${addData.data.city} added to monitoring!`, 'success');
+                    } else {
+                        showNotification('City not found or data unavailable. Please try another city.', 'error');
+                    }
                 }
             } catch (error) {
                 console.error('Error searching city:', error);
                 showNotification('Error searching city. Please try again.', 'error');
             } finally {
                 showLoading(false);
+                searchInput.value = ''; // Clear search input
             }
         }
 
         // Select city from list
-        function selectCity(city) {
-            updateMainAQI(city);
-            showNotification(`Switched to ${city.name}, ${city.country}`, 'success');
+        async function selectCity(city) {
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/aqi/current/${encodeURIComponent(city.name)}`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    updateMainAQI({
+                        name: data.data.city,
+                        country: city.country || '',
+                        aqi: data.data.aqiValue,
+                        category: data.data.category
+                    });
+                    showNotification(`Switched to ${data.data.city}`, 'success');
+                } else {
+                    showNotification(`Unable to load data for ${city.name}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error selecting city:', error);
+                showNotification(`Error loading data for ${city.name}`, 'error');
+            } finally {
+                showLoading(false);
+            }
         }
 
         // Modal functions
+        function setAlert() {
+            const authHeader = sessionStorage.getItem('authorization');
+            if (!authHeader) {
+                alert('Please login to set up alerts');
+                openModal('loginModal');
+                return;
+            }
+            openModal('alertModal');
+        }
+
         function openModal(modalId) {
             const modal = document.getElementById(modalId);
             modal.style.display = 'block';
@@ -948,7 +1105,14 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             
+            if (!username || !password) {
+                showNotification('Please fill in all fields', 'error');
+                return;
+            }
+            
             try {
+                showNotification('Logging in...', 'info');
+                
                 const response = await fetch(`${API_BASE_URL}/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -957,24 +1121,38 @@
                     body: JSON.stringify({ username, password })
                 });
                 
-                if (response.ok) {
-                    const userData = await response.json();
-                    currentUser = userData;
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = {
+                        id: data.userId,
+                        username: data.username,
+                        email: data.email,
+                        city: data.city,
+                        alertThreshold: data.alertThreshold
+                    };
                     isLoggedIn = true;
+                    
+                    // Store user session
+                    localStorage.setItem('airSightUser', JSON.stringify(currentUser));
                     
                     // Update UI for logged-in user
                     updateNavbarForLoggedInUser();
                     closeModal('loginModal');
-                    showNotification('Welcome back!', 'success');
+                    showNotification(`Welcome back, ${currentUser.username}!`, 'success');
                     
                     // Clear form
                     document.getElementById('loginForm').reset();
+                    
+                    // Load user-specific data
+                    loadUserAlerts();
+                    
                 } else {
-                    showNotification('Invalid credentials. Please try again.', 'error');
+                    showNotification(data.message || 'Invalid credentials. Please try again.', 'error');
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showNotification('Login failed. Please try again.', 'error');
+                showNotification('Login failed. Please check your connection and try again.', 'error');
             }
         });
 
@@ -988,34 +1166,79 @@
             }
             
             const city = document.getElementById('alertCity').value;
-            const country = document.getElementById('alertCountry').value;
             const threshold = document.getElementById('alertThreshold').value;
             
             try {
-                const response = await fetch(`${API_BASE_URL}/alerts`, {
+                const response = await fetch(`${API_BASE_URL}/alerts/create?city=${encodeURIComponent(city)}&threshold=${threshold}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${currentUser.token}`
-                    },
-                    body: JSON.stringify({
-                        city,
-                        country,
-                        thresholdValue: parseInt(threshold)
-                    })
+                        'X-User-Id': currentUser.id.toString()
+                    }
                 });
                 
-                if (response.ok) {
+                const data = await response.json();
+                
+                if (data.success) {
                     closeModal('alertModal');
-                    showNotification('Alert created successfully!', 'success');
+                    showNotification('Alert settings updated successfully!', 'success');
                     document.getElementById('alertForm').reset();
                     loadUserAlerts();
                 } else {
-                    showNotification('Failed to create alert. Please try again.', 'error');
+                    showNotification(data.message || 'Failed to create alert. Please try again.', 'error');
                 }
             } catch (error) {
                 console.error('Alert creation error:', error);
                 showNotification('Failed to create alert. Please try again.', 'error');
+            }
+        });
+
+        // Registration form handler
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const phoneNumber = document.getElementById('regPhone').value;
+            const city = document.getElementById('regCity').value;
+            const alertThreshold = document.getElementById('regThreshold').value;
+            
+            if (!username || !email || !password) {
+                showNotification('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                showNotification('Creating account...', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        phoneNumber,
+                        city,
+                        alertThreshold: parseInt(alertThreshold)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    closeModal('registerModal');
+                    showNotification('Account created successfully! Please login.', 'success');
+                    document.getElementById('registerForm').reset();
+                    openModal('loginModal');
+                } else {
+                    showNotification(data.message || 'Registration failed. Please try again.', 'error');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showNotification('Registration failed. Please check your connection and try again.', 'error');
             }
         });
 
@@ -1082,6 +1305,21 @@
             }, 100);
         }
 
+        // View alerts function
+        function viewAlerts() {
+            const userMenu = document.querySelector('.user-menu');
+            if (userMenu) {
+                userMenu.remove();
+            }
+            
+            // Scroll to alerts section or show modal with alerts
+            const alertSection = document.querySelector('.glass-card h3');
+            if (alertSection) {
+                alertSection.scrollIntoView({ behavior: 'smooth' });
+                showNotification('Your alerts are displayed in the panel below', 'info');
+            }
+        }
+
         // Download PDF report
         async function downloadReport() {
             if (!isLoggedIn) {
@@ -1092,10 +1330,12 @@
             try {
                 showNotification('Generating PDF report...', 'info');
                 
-                const response = await fetch(`${API_BASE_URL}/reports/pdf?city=Delhi&country=IN`, {
+                const mainCity = document.getElementById('mainCity').textContent.split(',')[0] || 'Delhi';
+                
+                const response = await fetch(`${API_BASE_URL}/export/pdf?city=${encodeURIComponent(mainCity)}`, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${currentUser.token}`
+                        'X-User-Id': currentUser.id.toString()
                     }
                 });
                 
@@ -1104,7 +1344,7 @@
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `air-quality-report-${new Date().toISOString().split('T')[0]}.pdf`;
+                    a.download = `air-quality-report-${mainCity}-${new Date().toISOString().split('T')[0]}.pdf`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
@@ -1112,7 +1352,8 @@
                     
                     showNotification('Report downloaded successfully!', 'success');
                 } else {
-                    showNotification('Failed to generate report.', 'error');
+                    const errorText = await response.text();
+                    showNotification('Failed to generate report: ' + errorText, 'error');
                 }
             } catch (error) {
                 console.error('Download error:', error);
@@ -1125,15 +1366,18 @@
             if (!isLoggedIn) return;
             
             try {
-                const response = await fetch(`${API_BASE_URL}/alerts/user`, {
+                const response = await fetch(`${API_BASE_URL}/users/alerts`, {
                     headers: {
-                        'Authorization': `Bearer ${currentUser.token}`
+                        'X-User-Id': currentUser.id.toString()
                     }
                 });
                 
-                if (response.ok) {
-                    const alerts = await response.json();
-                    updateAlertsList(alerts);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateAlertsList(data.alerts);
+                } else {
+                    console.warn('Failed to load user alerts:', data.message);
                 }
             } catch (error) {
                 console.error('Error loading alerts:', error);
@@ -1195,6 +1439,9 @@
             currentUser = null;
             isLoggedIn = false;
             
+            // Clear stored session
+            localStorage.removeItem('airSightUser');
+            
             // Reset navbar
             const loginBtn = document.querySelector('.login-btn');
             loginBtn.innerHTML = '<i class="fas fa-user"></i> Login';
@@ -1205,6 +1452,16 @@
             if (userMenu) {
                 userMenu.remove();
             }
+            
+            // Reset alert list to default
+            const alertList = document.getElementById('alertList');
+            alertList.innerHTML = `
+                <div class="alert-item">
+                    <strong>Login Required</strong><br>
+                    Please login to view personalized alerts<br>
+                    <small>Register to get SMS notifications</small>
+                </div>
+            `;
             
             showNotification('Logged out successfully!', 'success');
         }

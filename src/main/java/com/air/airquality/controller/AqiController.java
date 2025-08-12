@@ -151,22 +151,37 @@ public class AqiController {
         try {
             logger.info("Searching cities with query: {}", query);
             
-            List<String> allCities = openAQService.getAvailableCities();
-            List<String> matchingCities = allCities.stream()
-                .filter(city -> city.toLowerCase().contains(query.toLowerCase()))
-                .limit(10)
-                .toList();
+            List<String> matchingCities = openAQService.searchCities(query);
             
             // If exact matches found, get current AQI for the first match
             AqiData currentData = null;
             if (!matchingCities.isEmpty()) {
-                currentData = openAQService.getCurrentAqiData(matchingCities.get(0));
+                try {
+                    currentData = openAQService.getCurrentAqiData(matchingCities.get(0));
+                } catch (Exception e) {
+                    logger.warn("Could not get current data for city: {}", matchingCities.get(0));
+                }
+            }
+            
+            // If no matches found and query looks like a city name, try to add it
+            if (matchingCities.isEmpty() && query.trim().length() > 2) {
+                logger.info("No matches found for '{}', attempting to add as new city", query);
+                boolean added = openAQService.addCityToMonitoring(query.trim());
+                if (added) {
+                    matchingCities = List.of(query.trim());
+                    try {
+                        currentData = openAQService.getCurrentAqiData(query.trim());
+                    } catch (Exception e) {
+                        logger.warn("Could not get current data for newly added city: {}", query);
+                    }
+                }
             }
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("cities", matchingCities);
             response.put("query", query);
+            response.put("found", matchingCities.size());
             
             if (currentData != null) {
                 AqiResponse aqiResponse = new AqiResponse(
@@ -242,6 +257,57 @@ public class AqiController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
             response.put("message", "Unable to fetch data for requested cities");
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    // Public endpoint - add new city to monitoring
+    @PostMapping("/cities/add")
+    public ResponseEntity<?> addCityToMonitoring(@RequestParam String city) {
+        try {
+            logger.info("Request to add new city to monitoring: {}", city);
+            
+            boolean success = openAQService.addCityToMonitoring(city);
+            
+            Map<String, Object> response = new HashMap<>();
+            
+            if (success) {
+                // Get the newly added city data
+                AqiData aqiData = openAQService.getCurrentAqiData(city);
+                AqiResponse aqiResponse = new AqiResponse(
+                    aqiData.getCity(),
+                    aqiData.getAqiValue(),
+                    aqiData.getPm25(),
+                    aqiData.getPm10(),
+                    aqiData.getNo2(),
+                    aqiData.getSo2(),
+                    aqiData.getCo(),
+                    aqiData.getO3(),
+                    aqiData.getTimestamp()
+                );
+                aqiResponse.setCategory(openAQService.getAqiCategory(aqiData.getAqiValue()));
+                aqiResponse.setDescription(openAQService.getAqiDescription(aqiData.getAqiValue()));
+                
+                response.put("success", true);
+                response.put("message", "City successfully added to monitoring");
+                response.put("city", city);
+                response.put("data", aqiResponse);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to add city to monitoring. City may not exist or data unavailable.");
+                response.put("city", city);
+            }
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            logger.error("Error adding city to monitoring {}: {}", city, e.getMessage());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Error adding city to monitoring");
+            response.put("city", city);
             response.put("error", e.getMessage());
             
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);

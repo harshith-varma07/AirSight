@@ -64,10 +64,31 @@ public class UserService {
             user.setPhoneNumber(updatedUser.getPhoneNumber());
             user.setCity(updatedUser.getCity());
             user.setAlertThreshold(updatedUser.getAlertThreshold());
+            user.setUpdatedAt(java.time.LocalDateTime.now());
             
             return userRepository.save(user);
         }
         
         throw new RuntimeException("User not found");
+    }
+    
+    public User getUserById(Long userId) {
+        return userRepository.findById(userId).orElse(null);
+    }
+    
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username).orElse(null);
+    }
+    
+    public boolean deleteUser(Long userId) {
+        try {
+            if (userRepository.existsById(userId)) {
+                userRepository.deleteById(userId);
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
