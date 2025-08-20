@@ -153,7 +153,7 @@ public class AlertService {
     
     public List<UserAlert> getUserAlerts(Long userId) {
         try {
-            return userAlertRepository.findByUserIdOrderByTimestampDesc(userId);
+            return userAlertRepository.findByUserIdOrderByCreatedAtDesc(userId);
         } catch (Exception e) {
             logger.error("Error getting alerts for user {}: {}", userId, e.getMessage());
             return List.of();

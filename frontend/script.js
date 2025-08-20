@@ -14,10 +14,14 @@ document.addEventListener('DOMContentLoaded', function() {
             currentUser = JSON.parse(savedUser);
             isLoggedIn = true;
             updateNavbarForLoggedInUser();
+            showHistoricalDataCard();
         } catch (e) {
             localStorage.removeItem('airSightUser');
         }
     }
+    
+    // Initialize date inputs with default values
+    initializeDateInputs();
     
     loadDashboardData();
     setInterval(loadDashboardData, 300000); // Update every 5 minutes
@@ -334,8 +338,13 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             };
             isLoggedIn = true;
             
-            // Store user session
+            // Store user session and auth headers
             localStorage.setItem('airSightUser', JSON.stringify(currentUser));
+            
+            // Store authentication headers for API calls
+            const authHeader = `Basic ${btoa(username + ':' + password)}`;
+            sessionStorage.setItem('authorization', authHeader);
+            sessionStorage.setItem('userId', data.userId.toString());
             
             // Update UI for logged-in user
             updateNavbarForLoggedInUser();
@@ -448,6 +457,9 @@ function updateNavbarForLoggedInUser() {
     const loginBtn = document.querySelector('.login-btn');
     loginBtn.innerHTML = `<i class="fas fa-user-circle"></i> ${currentUser.username}`;
     loginBtn.onclick = () => showUserMenu();
+    
+    // Show historical data card for premium users
+    showHistoricalDataCard();
 }
 
 // Show user menu
@@ -642,6 +654,11 @@ function logout() {
     
     // Clear stored session
     localStorage.removeItem('airSightUser');
+    sessionStorage.removeItem('authorization');
+    sessionStorage.removeItem('userId');
+    
+    // Hide historical data card
+    hideHistoricalDataCard();
     
     // Reset navbar
     const loginBtn = document.querySelector('.login-btn');
@@ -829,6 +846,97 @@ setInterval(() => {
         updateLastUpdatedTime();
     }
 }, 30000); // Update every 30 seconds
+
+// Historical Data Functions
+function showHistoricalDataCard() {
+    if (isLoggedIn) {
+        document.getElementById('historicalCard').style.display = 'block';
+    }
+}
+
+function hideHistoricalDataCard() {
+    document.getElementById('historicalCard').style.display = 'none';
+    ChartManager.destroy();
+}
+
+function initializeDateInputs() {
+    const now = new Date();
+    const endDate = new Date(now);
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - 7); // Default to last 7 days
+    
+    // Format dates for datetime-local input
+    const formatDateForInput = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    document.getElementById('startDate').value = formatDateForInput(startDate);
+    document.getElementById('endDate').value = formatDateForInput(endDate);
+}
+
+async function loadHistoricalData() {
+    if (!isLoggedIn) {
+        showNotification('Please login to view historical data', 'error');
+        return;
+    }
+    
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const currentCity = document.getElementById('cityName').textContent;
+    
+    if (!startDate || !endDate) {
+        showNotification('Please select both start and end dates', 'error');
+        return;
+    }
+    
+    if (new Date(startDate) >= new Date(endDate)) {
+        showNotification('Start date must be before end date', 'error');
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        
+        const authHeader = sessionStorage.getItem('authorization');
+        const userId = sessionStorage.getItem('userId');
+        
+        const response = await fetch(
+            `${API_BASE_URL}/aqi/historical/${encodeURIComponent(currentCity)}?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+            {
+                headers: {
+                    'Authorization': authHeader,
+                    'X-User-Id': userId,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        
+        const data = await response.json();
+        
+        if (data.success && data.data && data.data.length > 0) {
+            ChartManager.create(data.data, currentCity);
+            const stats = ChartManager.calculateStats(data.data);
+            ChartManager.updateStats(stats);
+            showNotification(`Loaded ${data.count} data points for ${currentCity}`, 'success');
+        } else if (data.requiresAuth) {
+            showNotification('Please login to access historical data', 'error');
+            openModal('loginModal');
+        } else {
+            showNotification('No historical data found for the selected period', 'warning');
+        }
+        
+    } catch (error) {
+        console.error('Error loading historical data:', error);
+        showNotification('Error loading historical data. Please try again.', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
 
 // Initialize with sample data on load
 setTimeout(() => {

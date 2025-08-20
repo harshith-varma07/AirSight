@@ -11,11 +11,11 @@ import java.util.List;
 @Repository
 public interface UserAlertRepository extends JpaRepository<UserAlert, Long> {
     
-    List<UserAlert> findByUserIdOrderByTimestampDesc(Long userId);
+    List<UserAlert> findByUserIdOrderByCreatedAtDesc(Long userId);
     
     UserAlert findByIdAndUserId(Long alertId, Long userId);
     
-    @Query("SELECT ua FROM UserAlert ua WHERE ua.user.id = :userId AND ua.timestamp >= :startDate")
+    @Query("SELECT ua FROM UserAlert ua WHERE ua.user.id = :userId AND ua.createdAt >= :startDate")
     List<UserAlert> findByUserIdAndTimestampAfter(@Param("userId") Long userId, @Param("startDate") LocalDateTime startDate);
     
     @Query("SELECT COUNT(ua) FROM UserAlert ua WHERE ua.user.id = :userId AND ua.alertSent = true")

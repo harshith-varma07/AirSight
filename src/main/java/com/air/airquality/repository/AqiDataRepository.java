@@ -15,7 +15,7 @@ public interface AqiDataRepository extends JpaRepository<AqiData, Long> {
     @Query("SELECT a FROM AqiData a WHERE a.city = :city ORDER BY a.timestamp DESC")
     List<AqiData> findByCityOrderByTimestampDesc(@Param("city") String city);
     
-    @Query("SELECT a FROM AqiData a WHERE a.city = :city ORDER BY a.timestamp DESC LIMIT 1")
+    @Query(value = "SELECT * FROM aqi_data a WHERE a.city = :city ORDER BY a.timestamp DESC LIMIT 1", nativeQuery = true)
     Optional<AqiData> findLatestByCityNative(@Param("city") String city);
     
     @Query("SELECT a FROM AqiData a WHERE a.city = :city AND a.timestamp BETWEEN :startDate AND :endDate ORDER BY a.timestamp")
