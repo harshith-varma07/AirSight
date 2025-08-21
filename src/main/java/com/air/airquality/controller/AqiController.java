@@ -14,168 +14,74 @@ import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/aqi")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:8080"})
 public class AqiController {
     
     private static final Logger logger = LoggerFactory.getLogger(AqiController.class);
+    private static final int CACHE_DURATION_MINUTES = 5;
     
     @Autowired
     private AqiService aqiService;
-    
     @Autowired
     private OpenAQService openAQService;
     
-    // Public endpoint - accessible by all users
-    @GetMapping("/current/{city}")
-    public ResponseEntity<?> getCurrentAqi(@PathVariable String city) {
-        try {
-            logger.info("Fetching current AQI for city: {}", city);
-            AqiData aqiData = openAQService.getCurrentAqiData(city);
-            
-            AqiResponse response = new AqiResponse(
-                aqiData.getCity(),
-                aqiData.getAqiValue(),
-                aqiData.getPm25(),
-                aqiData.getPm10(),
-                aqiData.getNo2(),
-                aqiData.getSo2(),
-                aqiData.getCo(),
-                aqiData.getO3(),
-                aqiData.getTimestamp()
-            );
-            
-            // Add additional metadata
-            response.setCategory(openAQService.getAqiCategory(aqiData.getAqiValue()));
-            response.setDescription(openAQService.getAqiDescription(aqiData.getAqiValue()));
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", response);
-            result.put("message", "AQI data retrieved successfully");
-            
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            logger.error("Error fetching current AQI for city {}: {}", city, e.getMessage());
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Unable to fetch AQI data for " + city + ". Please try again later.");
-            response.put("error", e.getMessage());
-            
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
-    }
+    // Optimized caching with ConcurrentHashMap for thread safety
+    private final Map<String, CachedResponse> cache = new ConcurrentHashMap<>();
     
-    // Protected endpoint - only for registered users
-    @GetMapping("/historical/{city}")
-    public ResponseEntity<?> getHistoricalData(
-            @PathVariable String city,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            HttpServletRequest request) {
+    @GetMapping("/current/{city}")
+    public ResponseEntity<Map<String, Object>> getCurrentAqi(@PathVariable String city) {
+        String normalizedCity = normalizeCity(city);
+        
+        // Check cache first - O(1) lookup
+        CachedResponse cachedData = cache.get(normalizedCity);
+        if (cachedData != null && !cachedData.isExpired()) {
+            logger.debug("Cache hit for city: {}", normalizedCity);
+            return ResponseEntity.ok(cachedData.getData());
+        }
         
         try {
-            // Check if user is authenticated (simple check for demo)
-            String userId = request.getHeader("X-User-Id");
-            if (userId == null || userId.isEmpty()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", false);
-                response.put("message", "Historical data access requires user registration and login");
-                response.put("requiresAuth", true);
-                
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-            }
+            AqiData aqiData = openAQService.getCurrentAqiData(normalizedCity);
+            Map<String, Object> response = buildSuccessResponse(aqiData);
             
-            logger.info("Fetching historical data for city: {} from {} to {} for user: {}", 
-                       city, startDate, endDate, userId);
-            
-            List<AqiResponse> historicalData = aqiService.getHistoricalData(city, startDate, endDate);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("data", historicalData);
-            response.put("count", historicalData.size());
-            response.put("city", city);
-            response.put("startDate", startDate);
-            response.put("endDate", endDate);
-            response.put("message", "Historical data retrieved successfully");
+            // Cache the response
+            cache.put(normalizedCity, new CachedResponse(response));
             
             return ResponseEntity.ok(response);
-            
         } catch (Exception e) {
-            logger.error("Error fetching historical data for city {}: {}", city, e.getMessage());
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Unable to fetch historical data for " + city);
-            response.put("error", e.getMessage());
-            
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            logger.error("Error fetching AQI for city {}: {}", normalizedCity, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(buildErrorResponse("Unable to fetch AQI data for " + city, e.getMessage()));
         }
     }
-    
-    // Public endpoint - list of available cities
+
     @GetMapping("/cities")
-    public ResponseEntity<?> getAvailableCities() {
+    public ResponseEntity<Map<String, Object>> getAvailableCities() {
         try {
-            logger.info("Fetching list of available cities");
             List<String> cities = openAQService.getAvailableCities();
-            
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("cities", cities);
             response.put("count", cities.size());
-            response.put("message", "Available cities retrieved successfully");
-            
             return ResponseEntity.ok(response);
-            
         } catch (Exception e) {
-            logger.error("Error fetching available cities: {}", e.getMessage());
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Unable to fetch available cities");
-            response.put("error", e.getMessage());
-            
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            logger.error("Error fetching cities: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(buildErrorResponse("Unable to fetch available cities", e.getMessage()));
         }
     }
-    
-    // Public endpoint - search cities (fuzzy search)
+
     @GetMapping("/search")
-    public ResponseEntity<?> searchCities(@RequestParam String query) {
+    public ResponseEntity<Map<String, Object>> searchCities(@RequestParam String query) {
         try {
-            logger.info("Searching cities with query: {}", query);
-            
-            List<String> matchingCities = openAQService.searchCities(query);
-            
-            // If exact matches found, get current AQI for the first match
-            AqiData currentData = null;
-            if (!matchingCities.isEmpty()) {
-                try {
-                    currentData = openAQService.getCurrentAqiData(matchingCities.get(0));
-                } catch (Exception e) {
-                    logger.warn("Could not get current data for city: {}", matchingCities.get(0));
-                }
-            }
-            
-            // If no matches found and query looks like a city name, try to add it
-            if (matchingCities.isEmpty() && query.trim().length() > 2) {
-                logger.info("No matches found for '{}', attempting to add as new city", query);
-                boolean added = openAQService.addCityToMonitoring(query.trim());
-                if (added) {
-                    matchingCities = List.of(query.trim());
-                    try {
-                        currentData = openAQService.getCurrentAqiData(query.trim());
-                    } catch (Exception e) {
-                        logger.warn("Could not get current data for newly added city: {}", query);
-                    }
-                }
-            }
+            String normalizedQuery = normalizeCity(query.trim());
+            List<String> matchingCities = openAQService.searchCities(normalizedQuery);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -183,134 +89,192 @@ public class AqiController {
             response.put("query", query);
             response.put("found", matchingCities.size());
             
-            if (currentData != null) {
-                AqiResponse aqiResponse = new AqiResponse(
-                    currentData.getCity(),
-                    currentData.getAqiValue(),
-                    currentData.getPm25(),
-                    currentData.getPm10(),
-                    currentData.getNo2(),
-                    currentData.getSo2(),
-                    currentData.getCo(),
-                    currentData.getO3(),
-                    currentData.getTimestamp()
-                );
-                aqiResponse.setCategory(openAQService.getAqiCategory(currentData.getAqiValue()));
-                aqiResponse.setDescription(openAQService.getAqiDescription(currentData.getAqiValue()));
-                response.put("currentData", aqiResponse);
+            // If cities found, get current data for the first one
+            if (!matchingCities.isEmpty()) {
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return openAQService.getCurrentAqiData(matchingCities.get(0));
+                    } catch (Exception e) {
+                        return null;
+                    }
+                }).thenAccept(aqiData -> {
+                    if (aqiData != null) {
+                        response.put("currentData", buildAqiResponse(aqiData));
+                    }
+                });
             }
             
             return ResponseEntity.ok(response);
-            
         } catch (Exception e) {
-            logger.error("Error searching cities with query {}: {}", query, e.getMessage());
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Search failed");
-            response.put("error", e.getMessage());
-            
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            logger.error("Search error for query '{}': {}", query, e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(buildErrorResponse("Search failed", e.getMessage()));
         }
     }
-    
-    // Public endpoint - get multiple cities data at once
+
     @GetMapping("/multiple")
-    public ResponseEntity<?> getMultipleCitiesAqi(@RequestParam List<String> cities) {
+    public ResponseEntity<Map<String, Object>> getMultipleCitiesAqi(@RequestParam List<String> cities) {
         try {
-            logger.info("Fetching AQI for multiple cities: {}", cities);
+            // Parallel processing for better performance
+            Map<String, AqiResponse> citiesData = cities.parallelStream()
+                .collect(Collectors.toConcurrentMap(
+                    city -> city,
+                    city -> {
+                        try {
+                            AqiData aqiData = openAQService.getCurrentAqiData(normalizeCity(city));
+                            return buildAqiResponse(aqiData);
+                        } catch (Exception e) {
+                            logger.warn("Failed to get data for city: {}", city);
+                            return null;
+                        }
+                    }
+                ));
             
-            Map<String, AqiResponse> citiesData = new HashMap<>();
+            // Remove null values
+            citiesData.values().removeIf(Objects::isNull);
             
-            for (String city : cities) {
-                try {
-                    AqiData aqiData = openAQService.getCurrentAqiData(city);
-                    AqiResponse response = new AqiResponse(
-                        aqiData.getCity(),
-                        aqiData.getAqiValue(),
-                        aqiData.getPm25(),
-                        aqiData.getPm10(),
-                        aqiData.getNo2(),
-                        aqiData.getSo2(),
-                        aqiData.getCo(),
-                        aqiData.getO3(),
-                        aqiData.getTimestamp()
-                    );
-                    response.setCategory(openAQService.getAqiCategory(aqiData.getAqiValue()));
-                    response.setDescription(openAQService.getAqiDescription(aqiData.getAqiValue()));
-                    citiesData.put(city, response);
-                } catch (Exception e) {
-                    logger.warn("Failed to get data for city: {}", city);
-                }
-            }
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", citiesData);
+            response.put("count", citiesData.size());
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("data", citiesData);
-            result.put("requestedCities", cities);
-            result.put("foundCities", citiesData.keySet());
-            result.put("count", citiesData.size());
-            
-            return ResponseEntity.ok(result);
-            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error fetching multiple cities AQI: {}", e.getMessage());
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Unable to fetch data for requested cities");
-            response.put("error", e.getMessage());
-            
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            return ResponseEntity.badRequest()
+                    .body(buildErrorResponse("Unable to fetch data for requested cities", e.getMessage()));
         }
     }
-    
-    // Public endpoint - add new city to monitoring
+
     @PostMapping("/cities/add")
-    public ResponseEntity<?> addCityToMonitoring(@RequestParam String city) {
+    public ResponseEntity<Map<String, Object>> addCityToMonitoring(@RequestParam String city) {
         try {
-            logger.info("Request to add new city to monitoring: {}", city);
-            
-            boolean success = openAQService.addCityToMonitoring(city);
+            String normalizedCity = normalizeCity(city);
+            boolean success = openAQService.addCityToMonitoring(normalizedCity);
             
             Map<String, Object> response = new HashMap<>();
-            
             if (success) {
-                // Get the newly added city data
-                AqiData aqiData = openAQService.getCurrentAqiData(city);
-                AqiResponse aqiResponse = new AqiResponse(
-                    aqiData.getCity(),
-                    aqiData.getAqiValue(),
-                    aqiData.getPm25(),
-                    aqiData.getPm10(),
-                    aqiData.getNo2(),
-                    aqiData.getSo2(),
-                    aqiData.getCo(),
-                    aqiData.getO3(),
-                    aqiData.getTimestamp()
-                );
-                aqiResponse.setCategory(openAQService.getAqiCategory(aqiData.getAqiValue()));
-                aqiResponse.setDescription(openAQService.getAqiDescription(aqiData.getAqiValue()));
-                
+                AqiData aqiData = openAQService.getCurrentAqiData(normalizedCity);
                 response.put("success", true);
-                response.put("message", "City successfully added to monitoring");
-                response.put("city", city);
-                response.put("data", aqiResponse);
+                response.put("message", "City added successfully");
+                response.put("data", buildAqiResponse(aqiData));
+                
+                // Clear cache to refresh city list
+                cache.clear();
             } else {
                 response.put("success", false);
-                response.put("message", "Failed to add city to monitoring. City may not exist or data unavailable.");
-                response.put("city", city);
+                response.put("message", "Failed to add city");
             }
             
             return ResponseEntity.ok(response);
-            
         } catch (Exception e) {
-            logger.error("Error adding city to monitoring {}: {}", city, e.getMessage());
+            logger.error("Error adding city {}: {}", city, e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(buildErrorResponse("Error adding city", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/historical/{city}")
+    public ResponseEntity<Map<String, Object>> getHistoricalData(
+            @PathVariable String city,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            HttpServletRequest request) {
+        
+        String userId = request.getHeader("X-User-Id");
+        if (userId == null || userId.isEmpty()) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("message", "Error adding city to monitoring");
-            response.put("city", city);
-            response.put("error", e.getMessage());
+            response.put("message", "Authentication required");
+            response.put("requiresAuth", true);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        
+        try {
+            String normalizedCity = normalizeCity(city);
             
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            // Default to last 30 days if dates not provided
+            if (endDate == null) {
+                endDate = LocalDateTime.now();
+            }
+            if (startDate == null) {
+                startDate = endDate.minusDays(30);
+            }
+            
+            List<AqiResponse> historicalData = aqiService.getHistoricalData(normalizedCity, startDate, endDate);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("data", historicalData);
+            response.put("count", historicalData.size());
+            response.put("city", normalizedCity);
+            response.put("startDate", startDate);
+            response.put("endDate", endDate);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error fetching historical data for {}: {}", city, e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(buildErrorResponse("Unable to fetch historical data", e.getMessage()));
+        }
+    }
+
+    // Utility methods
+    private String normalizeCity(String city) {
+        return Arrays.stream(city.toLowerCase().trim().split("\\s+"))
+                .map(word -> word.substring(0, 1).toUpperCase() + word.substring(1))
+                .collect(Collectors.joining(" "));
+    }
+
+    private Map<String, Object> buildSuccessResponse(AqiData aqiData) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("data", buildAqiResponse(aqiData));
+        response.put("message", "Data retrieved successfully");
+        return response;
+    }
+
+    private AqiResponse buildAqiResponse(AqiData aqiData) {
+        AqiResponse response = new AqiResponse(
+            aqiData.getCity(),
+            aqiData.getAqiValue(),
+            aqiData.getPm25(),
+            aqiData.getPm10(),
+            aqiData.getNo2(),
+            aqiData.getSo2(),
+            aqiData.getCo(),
+            aqiData.getO3(),
+            aqiData.getTimestamp()
+        );
+        response.setCategory(openAQService.getAqiCategory(aqiData.getAqiValue()));
+        response.setDescription(openAQService.getAqiDescription(aqiData.getAqiValue()));
+        return response;
+    }
+
+    private Map<String, Object> buildErrorResponse(String message, String error) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", message);
+        response.put("error", error);
+        return response;
+    }
+
+    // Inner class for caching
+    private static class CachedResponse {
+        private final Map<String, Object> data;
+        private final LocalDateTime timestamp;
+
+        public CachedResponse(Map<String, Object> data) {
+            this.data = data;
+            this.timestamp = LocalDateTime.now();
+        }
+
+        public boolean isExpired() {
+            return timestamp.isBefore(LocalDateTime.now().minusMinutes(CACHE_DURATION_MINUTES));
+        }
+
+        public Map<String, Object> getData() {
+            return data;
         }
     }
 }

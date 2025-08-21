@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: airsight-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: airqualitydb
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_USER: ${DB_USER:-airsight}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-airsightpass}
+    ports:
+      - "${DB_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database_setup.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - airsight-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+
+  # Redis for caching (optional but recommended for production)
+  redis:
+    image: redis:7-alpine
+    container_name: airsight-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - airsight-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AirSight Application
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: airsight-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/airqualitydb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-airsight}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-airsightpass}
+      
+      # JPA Configuration
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: ${SHOW_SQL:-false}
+      
+      # Redis Configuration (optional)
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      
+      # OpenAQ API Configuration
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      
+      # Twilio Configuration (optional)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      
+      # Application Configuration
+      SERVER_PORT: 8080
+      LOGGING_LEVEL_COM_AIR_AIRQUALITY: ${LOG_LEVEL:-INFO}
+      
+      # Production optimizations
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE: 25
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_UPDATES: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_VERSIONED_DATA: true
+      
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - airsight-network
+    volumes:
+      - app_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  # Nginx Reverse Proxy (optional for production)
+  nginx:
+    image: nginx:alpine
+    container_name: airsight-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # Add SSL certificates here
+    depends_on:
+      - app
+    networks:
+      - airsight-network
+    profiles:
+      - production  # Only start nginx in production profile
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  airsight-network:
+    driver: bridge
