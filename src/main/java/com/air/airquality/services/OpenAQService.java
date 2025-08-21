@@ -43,6 +43,43 @@ public class OpenAQService {
     // Cache for recent API calls - optimized with time-based eviction
     private final Map<String, CachedAqiData> apiCache = new ConcurrentHashMap<>();
     
+    // Complete fallback data for when API is unavailable - using the integer AQI values
+    private static final Map<String, AqiData> FALLBACK_DATA = new ConcurrentHashMap<String, AqiData>() {{
+        put("Delhi", createFallbackData("Delhi", 152));
+        put("Mumbai", createFallbackData("Mumbai", 89));
+        put("Bangalore", createFallbackData("Bangalore", 67));
+        put("Chennai", createFallbackData("Chennai", 78));
+        put("Kolkata", createFallbackData("Kolkata", 134));
+        put("Hyderabad", createFallbackData("Hyderabad", 92));
+        put("Pune", createFallbackData("Pune", 85));
+        put("Jaipur", createFallbackData("Jaipur", 98));
+        put("Lucknow", createFallbackData("Lucknow", 145));
+        put("Kanpur", createFallbackData("Kanpur", 167));
+        put("Ahmedabad", createFallbackData("Ahmedabad", 112));
+        put("Nagpur", createFallbackData("Nagpur", 76));
+        put("New York", createFallbackData("New York", 45));
+        put("London", createFallbackData("London", 52));
+        put("Paris", createFallbackData("Paris", 63));
+        put("Tokyo", createFallbackData("Tokyo", 41));
+        put("Beijing", createFallbackData("Beijing", 187));
+        put("Sydney", createFallbackData("Sydney", 38));
+        put("Singapore", createFallbackData("Singapore", 55));
+        put("Dubai", createFallbackData("Dubai", 82));
+    }};
+    
+    // Helper method to create fallback data from AQI value
+    private static AqiData createFallbackData(String city, int aqi) {
+        // Estimate pollutant values based on AQI (simplified approach)
+        double pm25 = aqi <= 50 ? aqi * 0.4 : aqi <= 100 ? 20 + (aqi - 50) * 0.3 : 35 + (aqi - 100) * 0.4;
+        double pm10 = pm25 * 1.5;
+        double no2 = pm25 * 0.8;
+        double so2 = pm25 * 0.3;
+        double co = pm25 * 0.05;
+        double o3 = aqi <= 100 ? aqi * 0.7 : 70 + (aqi - 100) * 0.2;
+        
+        return new AqiData(city, aqi, pm25, pm10, no2, so2, co, o3);
+    }
+    
     public AqiData getCurrentAqiData(String city) {
         String normalizedCity = normalizeCity(city);
         
@@ -300,33 +337,6 @@ public class OpenAQService {
             return data;
         }
     }
-}
-    
-    private static final Logger logger = LoggerFactory.getLogger(OpenAQService.class);
-    
-    @Autowired
-    private AqiDataRepository aqiDataRepository;
-    
-    @Value("${openaq.api.url}")
-    private String openAQApiUrl;
-    
-    private final RestTemplate restTemplate = new RestTemplate();
-    
-    // Fallback data for when API is unavailable
-    private static final Map<String, AqiData> FALLBACK_DATA = new HashMap<String, AqiData>() {{
-        put("Delhi", new AqiData("Delhi", 152, 65.4, 98.2, 42.1, 15.6, 2.1, 89.3));
-        put("Mumbai", new AqiData("Mumbai", 89, 34.2, 67.8, 28.5, 12.3, 1.8, 76.4));
-        put("Bangalore", new AqiData("Bangalore", 67, 28.9, 54.3, 24.1, 9.8, 1.2, 65.2));
-        put("Chennai", new AqiData("Chennai", 78, 32.1, 61.7, 26.8, 11.4, 1.5, 71.9));
-        put("Kolkata", new AqiData("Kolkata", 134, 58.7, 85.4, 38.2, 14.1, 2.3, 82.6));
-        put("Hyderabad", new AqiData("Hyderabad", 92, 38.4, 71.2, 29.7, 13.2, 1.7, 74.8));
-        put("New York", new AqiData("New York", 45, 18.2, 32.4, 21.3, 8.7, 1.1, 58.9));
-        put("London", new AqiData("London", 52, 21.8, 38.9, 19.6, 7.4, 0.9, 62.3));
-        put("Paris", new AqiData("Paris", 63, 26.4, 45.7, 23.8, 9.1, 1.3, 68.7));
-        put("Tokyo", new AqiData("Tokyo", 41, 16.9, 29.8, 18.4, 6.2, 0.8, 54.6));
-        put("Beijing", new AqiData("Beijing", 187, 78.9, 112.6, 48.7, 18.9, 2.8, 94.2));
-        put("Sydney", new AqiData("Sydney", 38, 14.6, 26.3, 15.8, 5.9, 0.7, 49.8));
-    }};
     
     @SuppressWarnings("null")
     public void fetchAndStoreAqiData(String city) {
@@ -405,313 +415,11 @@ public class OpenAQService {
         }
     }
     
-    public AqiData getCurrentAqiData(String city) {
-        try {
-            String normalizedCity = city.trim();
-            
-            // First try to get latest from database with exact match
-            var latestData = aqiDataRepository.findLatestByCityNative(normalizedCity);
-            if (latestData.isPresent()) {
-                var data = latestData.get();
-                long minutesSinceUpdate = java.time.Duration.between(
-                    data.getTimestamp(), 
-                    java.time.LocalDateTime.now()
-                ).toMinutes();
-                
-                if (minutesSinceUpdate < 30) {
-                    logger.info("Retrieved recent AQI data for city: {} from database (age: {} minutes)", 
-                               normalizedCity, minutesSinceUpdate);
-                    return data;
-                }
-                
-                logger.info("Database data for city: {} is {} minutes old, fetching fresh data", 
-                           normalizedCity, minutesSinceUpdate);
-            }
-            
-            // Try case-insensitive search in database
-            List<String> allCities = aqiDataRepository.findDistinctCities();
-            String matchingCity = allCities.stream()
-                .filter(dbCity -> dbCity.toLowerCase().equals(normalizedCity.toLowerCase()))
-                .findFirst()
-                .orElse(null);
-            
-            if (matchingCity != null && !matchingCity.equals(normalizedCity)) {
-                logger.info("Found case-insensitive match: {} for query: {}", matchingCity, normalizedCity);
-                var caseInsensitiveData = aqiDataRepository.findLatestByCityNative(matchingCity);
-                if (caseInsensitiveData.isPresent()) {
-                    var data = caseInsensitiveData.get();
-                    long minutesSinceUpdate = java.time.Duration.between(
-                        data.getTimestamp(), 
-                        java.time.LocalDateTime.now()
-                    ).toMinutes();
-                    
-                    if (minutesSinceUpdate < 30) {
-                        return data;
-                    }
-                }
-            }
-            
-            // If not in database or data is old, try to fetch fresh data
-            fetchAndStoreAqiData(normalizedCity);
-            latestData = aqiDataRepository.findLatestByCityNative(normalizedCity);
-            
-            if (latestData.isPresent()) {
-                return latestData.get();
-            }
-            
-            // Last resort - check fallback data with case-insensitive match
-            String fallbackCity = FALLBACK_DATA.keySet().stream()
-                .filter(fbCity -> fbCity.toLowerCase().equals(normalizedCity.toLowerCase()))
-                .findFirst()
-                .orElse(null);
-                
-            if (fallbackCity != null) {
-                logger.warn("Returning fallback data for city: {} (matched: {})", normalizedCity, fallbackCity);
-                AqiData fallbackData = FALLBACK_DATA.get(fallbackCity);
-                
-                // Add some random variation to make it seem more realistic
-                double variation = 0.95 + (Math.random() * 0.1); // 95% to 105% of original value
-                
-                AqiData variatedData = new AqiData(
-                    normalizedCity, // Use the user's input city name
-                    (int) (fallbackData.getAqiValue() * variation),
-                    fallbackData.getPm25() != null ? fallbackData.getPm25() * variation : null,
-                    fallbackData.getPm10() != null ? fallbackData.getPm10() * variation : null,
-                    fallbackData.getNo2() != null ? fallbackData.getNo2() * variation : null,
-                    fallbackData.getSo2() != null ? fallbackData.getSo2() * variation : null,
-                    fallbackData.getCo() != null ? fallbackData.getCo() * variation : null,
-                    fallbackData.getO3() != null ? fallbackData.getO3() * variation : null
-                );
-                
-                return variatedData;
-            }
-            
-            throw new RuntimeException("No AQI data available for city: " + normalizedCity);
-            
-        } catch (Exception e) {
-            logger.error("Error getting current AQI data for city {}: {}", city, e.getMessage());
-            throw new RuntimeException("Failed to get AQI data for city: " + city, e);
-        }
-    }
-    
-    public List<String> getAvailableCities() {
-        try {
-            // First get cities from database
-            List<String> dbCities = aqiDataRepository.findDistinctCities();
-            
-            // If database has cities, return them
-            if (!dbCities.isEmpty()) {
-                logger.info("Retrieved {} cities from database", dbCities.size());
-                return dbCities;
-            }
-            
-            // If no cities in database, return fallback cities and try to populate database
-            logger.warn("No cities found in database, using fallback cities and populating database");
-            populateFallbackData();
-            
-            return Arrays.asList(FALLBACK_DATA.keySet().toArray(new String[0]));
-            
-        } catch (Exception e) {
-            logger.error("Error getting available cities: {}", e.getMessage());
-            // Return fallback cities as last resort
-            return Arrays.asList(FALLBACK_DATA.keySet().toArray(new String[0]));
-        }
-    }
-    
-    private void populateFallbackData() {
-        try {
-            logger.info("Populating database with fallback data for {} cities", FALLBACK_DATA.size());
-            for (String city : FALLBACK_DATA.keySet()) {
-                fetchAndStoreAqiData(city);
-                // Small delay to avoid overwhelming the system
-                Thread.sleep(500);
-            }
-        } catch (Exception e) {
-            logger.error("Error populating fallback data: {}", e.getMessage());
-        }
-    }
-    
-    private Integer calculateAQI(Double pm25) {
-        if (pm25 == null) return 50; // Default moderate value
-        
-        // US EPA AQI calculation for PM2.5
-        if (pm25 <= 12.0) {
-            return (int) Math.round((50.0 / 12.0) * pm25);
-        } else if (pm25 <= 35.5) {
-            return (int) Math.round(50 + ((50.0 / 23.5) * (pm25 - 12.0)));
-        } else if (pm25 <= 55.4) {
-            return (int) Math.round(100 + ((50.0 / 19.9) * (pm25 - 35.5)));
-        } else if (pm25 <= 150.4) {
-            return (int) Math.round(150 + ((50.0 / 95.0) * (pm25 - 55.4)));
-        } else if (pm25 <= 250.4) {
-            return (int) Math.round(200 + ((100.0 / 100.0) * (pm25 - 150.4)));
-        } else {
-            return (int) Math.round(300 + ((100.0 / 149.6) * (pm25 - 250.4)));
-        }
-    }
-    
-    public String getAqiCategory(Integer aqi) {
-        if (aqi <= 50) return "Good";
-        else if (aqi <= 100) return "Moderate";
-        else if (aqi <= 150) return "Unhealthy for Sensitive Groups";
-        else if (aqi <= 200) return "Unhealthy";
-        else if (aqi <= 300) return "Very Unhealthy";
-        else return "Hazardous";
-    }
-    
-    public String getAqiDescription(Integer aqi) {
-        if (aqi <= 50) return "Air quality is satisfactory, and air pollution poses little or no risk.";
-        else if (aqi <= 100) return "Air quality is acceptable. However, there may be a risk for some people, particularly those who are unusually sensitive to air pollution.";
-        else if (aqi <= 150) return "Members of sensitive groups may experience health effects. The general public is less likely to be affected.";
-        else if (aqi <= 200) return "Some members of the general public may experience health effects; members of sensitive groups may experience more serious health effects.";
-        else if (aqi <= 300) return "Health alert: The risk of health effects is increased for everyone.";
-        else return "Health warning of emergency conditions: everyone is more likely to be affected.";
-    }
-    
-    /**
-     * Search for cities that match the query string
-     * First searches in database, then falls back to known cities
-     * Enhanced to be case-insensitive and handle partial matches
-     */
-    public List<String> searchCities(String query) {
-        try {
-            if (query == null || query.trim().isEmpty()) {
-                return getAvailableCities();
-            }
-            
-            String searchQuery = query.trim().toLowerCase();
-            
-            // Get all available cities from database
-            List<String> allCities = getAvailableCities();
-            
-            // Filter cities that contain the search query (case-insensitive)
-            List<String> matchingCities = allCities.stream()
-                .filter(city -> city.toLowerCase().contains(searchQuery))
-                .limit(20) // Limit to 20 results
-                .toList();
-            
-            logger.info("Found {} cities matching query: '{}'", matchingCities.size(), query);
-            
-            // If no matches found in database cities, try to fetch from API for the exact query
-            if (matchingCities.isEmpty()) {
-                logger.info("No matching cities in database, attempting to fetch data for: {}", query);
-                try {
-                    // Try different variations of the city name
-                    String[] cityVariations = {
-                        query.trim(),
-                        capitalizeFirstLetter(query.trim()),
-                        query.trim().toUpperCase(),
-                        query.trim().toLowerCase()
-                    };
-                    
-                    boolean cityAdded = false;
-                    for (String cityVariation : cityVariations) {
-                        try {
-                            fetchAndStoreAqiData(cityVariation);
-                            // Check if data was successfully saved
-                            var latestData = aqiDataRepository.findLatestByCityNative(cityVariation);
-                            if (latestData.isPresent()) {
-                                logger.info("Successfully added city variation: {}", cityVariation);
-                                return List.of(cityVariation);
-                            }
-                        } catch (Exception e) {
-                            logger.debug("Failed to fetch data for city variation: {}", cityVariation);
-                        }
-                    }
-                    
-                    if (!cityAdded) {
-                        logger.warn("Failed to fetch data for any variation of city: {}", query);
-                        // Still return the original query as a potential match
-                        // The frontend will handle the case where no data is available
-                        return List.of(query.trim());
-                    }
-                } catch (Exception e) {
-                    logger.warn("Failed to fetch data for city: {}", query);
-                    return List.of(); // Return empty list if city not found
-                }
-            }
-            
-            return matchingCities;
-            
-        } catch (Exception e) {
-            logger.error("Error searching cities with query '{}': {}", query, e.getMessage());
-            return List.of();
-        }
-    }
-    
-    /**
-     * Helper method to capitalize first letter of each word
-     */
-    private String capitalizeFirstLetter(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-        
-        String[] words = input.trim().split("\\s+");
-        StringBuilder result = new StringBuilder();
-        
-        for (int i = 0; i < words.length; i++) {
-            if (i > 0) {
-                result.append(" ");
-            }
-            String word = words[i];
-            if (word.length() > 0) {
-                result.append(Character.toUpperCase(word.charAt(0)))
-                      .append(word.substring(1).toLowerCase());
-            }
-        }
-        
-        return result.toString();
-    }
-    
-    /**
-     * Add a new city to monitoring by fetching its data
-     * Enhanced to try multiple city name variations and provide better error handling
-     */
-    public boolean addCityToMonitoring(String city) {
-        try {
-            String normalizedCity = city.trim();
-            logger.info("Adding new city to monitoring: {}", normalizedCity);
-            
-            // Try different variations of the city name
-            String[] cityVariations = {
-                normalizedCity,
-                capitalizeFirstLetter(normalizedCity),
-                normalizedCity.toUpperCase(),
-                normalizedCity.toLowerCase()
-            };
-            
-            for (String cityVariation : cityVariations) {
-                try {
-                    logger.debug("Trying city variation: {}", cityVariation);
-                    fetchAndStoreAqiData(cityVariation);
-                    
-                    // Check if data was successfully saved
-                    var latestData = aqiDataRepository.findLatestByCityNative(cityVariation);
-                    if (latestData.isPresent()) {
-                        logger.info("Successfully added city to monitoring: {} (using variation: {})", 
-                                   normalizedCity, cityVariation);
-                        return true;
-                    }
-                } catch (Exception e) {
-                    logger.debug("Failed to add city variation '{}': {}", cityVariation, e.getMessage());
-                }
-            }
-            
-            logger.warn("Failed to add city to monitoring after trying all variations: {}", normalizedCity);
-            return false;
-            
-        } catch (Exception e) {
-            logger.error("Error adding city to monitoring {}: {}", city, e.getMessage());
-            return false;
-        }
-    }
-    
     // Health check method for deployment readiness
     public boolean isApiHealthy() {
         try {
             // Test API connectivity with a simple request
-            String testUrl = "https://api.openaq.org/v2/locations/random?limit=1";
+            String testUrl = "https://api.openaq.org/v2/locations?limit=1";
             ResponseEntity<OpenAQResponse> response = restTemplate.getForEntity(testUrl, OpenAQResponse.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
