@@ -35,7 +35,7 @@ public class UserService {
         logger.info("Registering new user: {}", request.getUsername());
         
         // Validate input
-        userValidator.validateRegistrationRequest(request);
+        userValidator.validateRegistration(request);
         
         // Check for existing users efficiently
         if (userRepository.existsByUsername(request.getUsername())) {

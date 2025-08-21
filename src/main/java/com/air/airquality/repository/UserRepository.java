@@ -13,6 +13,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     Optional<User> findByEmail(String email);
     
+    // Check if user exists by username or email (for validation)
+    boolean existsByUsername(String username);
+    boolean existsByEmail(String email);
+    
     @Query("SELECT u FROM User u WHERE u.city = :city AND u.alertThreshold <= :aqiValue")
     List<User> findUsersForAlert(@Param("city") String city, @Param("aqiValue") Integer aqiValue);
 }
