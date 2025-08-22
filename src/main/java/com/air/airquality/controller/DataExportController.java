@@ -22,7 +22,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/export")
-@CrossOrigin(origins = "*")
 public class DataExportController {
 
     @Autowired

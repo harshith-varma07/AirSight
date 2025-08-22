@@ -1,6 +1,15 @@
 # AirSight - Real-Time Air Quality Monitoring System
 
-A comprehensive real-time air quality monitoring system built with Spring Boot 2.7.14, Java 21, MySQL, and a modern web frontend.
+A comprehensive real-time air quality monitoring system built with Spring Boot 2.7.14, Java 21, MySQL, and a ## 🛠️ Tech Stack
+
+- **Backend:** Java 21, Spring Boot 2.7.14
+- **Database:** MySQL 8
+- **Frontend:** HTML5, CSS3, JavaScript (ES6+), Chart.js
+- **Analytics:** Python 3.8+, pandas, numpy, matplotlib, seaborn
+- **PDF Generation:** ReportLab (Python), iText (Java)
+- **Real-time Communication:** Spring WebSocket
+- **Alerting:** Spring Scheduled Tasks, Twilio SMS integration
+- **API:** RESTeb frontend.
 
 ## 🌟 Features
 
@@ -14,10 +23,12 @@ A comprehensive real-time air quality monitoring system built with Spring Boot 2
 - **📊 Historical Data Visualization**: Interactive charts showing AQI trends over time
 - **📅 Custom Date Range Analysis**: Select any time period for detailed analysis
 - **📈 Statistical Insights**: Average, max, min AQI values with data point counts
-- **📁 PDF/CSV Exports**: Download detailed air quality reports
+- **📁 PDF/CSV Exports**: Download detailed air quality reports with embedded charts
 - **📱 SMS Alerts**: Get notified when AQI exceeds your threshold via Twilio
 - **👤 Personal Dashboard**: Manage alerts and download history
 - **🔔 Multi-City Alerts**: Set different thresholds for multiple cities
+- **📊 Advanced Analytics**: Dedicated analytics page with multiple chart types
+- **🐍 Python-Powered Reports**: Enhanced PDF reports with matplotlib charts and comprehensive analytics
 
 ## 🏗️ Architecture
 
@@ -33,6 +44,14 @@ A comprehensive real-time air quality monitoring system built with Spring Boot 2
 - **Dynamic UI**: Real-time updates with API integration
 - **Responsive Design**: Works on desktop and mobile devices
 - **Modern Animations**: Glass-morphism effects and smooth transitions
+- **Analytics Dashboard**: Dedicated analytics page with interactive charts
+- **Chart.js Integration**: Advanced data visualization with Chart.js
+
+### Python Analytics Service
+- **Advanced Analytics**: Statistical analysis with pandas and numpy
+- **Chart Generation**: Professional charts using matplotlib and seaborn
+- **Enhanced PDF Reports**: Comprehensive reports with embedded charts using ReportLab
+- **Data Processing**: Time-series analysis and trend detection
 
 ### Database Schema
 ```sql
@@ -47,6 +66,7 @@ A comprehensive real-time air quality monitoring system built with Spring Boot 2
 - Java 21+
 - Maven 3.6+
 - MySQL 8.0+
+- Python 3.8+ (for enhanced analytics and PDF reports)
 - Node.js (optional, for development server)
 
 ### 1. Database Setup
@@ -74,7 +94,18 @@ twilio.auth.token=your_twilio_token
 twilio.phone.number=your_twilio_number
 ```
 
-### 3. Build & Run
+### 3. Python Analytics Setup (Optional - for Enhanced Features)
+```bash
+# Install Python dependencies for advanced analytics
+setup-python-analytics.bat    # On Windows
+# OR
+bash setup-python-analytics.sh  # On Linux/Mac
+
+# Manual installation
+pip install -r python-requirements.txt
+```
+
+### 4. Build & Run
 ```bash
 # Compile and run
 mvn clean compile
@@ -83,6 +114,18 @@ mvn spring-boot:run
 # Access the application
 # Backend API: http://localhost:8080/api
 # Frontend: Open frontend/index.html in browser
+# Analytics: Open frontend/analytics.html for advanced charts
+```
+
+## 📊 Analytics Features
+
+### Analytics Dashboard (`frontend/analytics.html`)
+- **AQI Trend Chart**: Time-series visualization of air quality changes
+- **Pollutants Bar Chart**: Average levels of PM2.5, PM10, NO2, SO2, CO, O3
+- **AQI Categories Pie Chart**: Distribution of air quality categories
+- **Pollution Level Distribution**: Frequency of different pollution levels
+- **Export Options**: Download individual charts or complete analytics reports
+- **Time Period Selection**: Analyze any custom date range
 ```
 
 ## � API Endpoints
@@ -108,6 +151,21 @@ GET  /api/alerts                 # Get user's alerts
 POST /api/alerts                 # Create new alert
 GET  /api/export/pdf/{city}      # Export historical data as PDF
 GET  /api/export/csv/{city}      # Export historical data as CSV
+GET  /api/export/analytics-pdf   # Enhanced PDF with charts (Python)
+GET  /api/export/analytics-stats # Get comprehensive analytics statistics
+GET  /api/export/chart/{type}    # Generate specific chart types
+```
+
+### Analytics Endpoints (Python-powered)
+```http
+GET  /api/export/analytics-pdf?city={city}&startDate={start}&endDate={end}
+     # Enhanced PDF report with multiple charts and comprehensive analytics
+     
+GET  /api/export/analytics-stats?city={city}&startDate={start}&endDate={end}
+     # Detailed statistics including trend analysis and pollutant averages
+     
+GET  /api/export/chart/{chartType}?city={city}&startDate={start}&endDate={end}
+     # Individual chart generation (trend_chart, bar_chart, pie_chart, dist_chart)
 ```
 
 ### Authentication
@@ -130,6 +188,7 @@ GET  /api/export/csv/{city}      # Export historical data as CSV
 - Java JDK 17 or later
 - Maven 3.8 or later
 - MySQL 8 or later
+- Python 3.8 or later (for enhanced analytics)
 - An IDE like IntelliJ IDEA or VS Code with Java extensions
 
 ### Installation
@@ -146,3 +205,35 @@ GET  /api/export/csv/{city}      # Export historical data as CSV
 
 3. **Frontend Setup:**
    - Open the `frontend/index.html` file in your web browser.
+   - For analytics features, also access `frontend/analytics.html`.
+
+4. **Python Analytics Setup (Optional):**
+   ```bash
+   # Run the setup script
+   setup-python-analytics.bat    # Windows
+   bash setup-python-analytics.sh  # Linux/Mac
+   
+   # Or manually install
+   pip install -r python-requirements.txt
+   ```
+
+## 🎯 Key Features Walkthrough
+
+### For All Users
+1. **Real-time Monitoring**: Visit the homepage to see current air quality data
+2. **City Search**: Use the search box to find and add new cities
+3. **Global Overview**: View multiple cities simultaneously
+
+### For Registered Users
+1. **Sign Up/Login**: Create an account to unlock premium features
+2. **Historical Analysis**: Access past air quality trends and patterns
+3. **Advanced Analytics**: Visit `/analytics.html` for comprehensive data visualization
+4. **Custom Reports**: Download detailed PDF reports with charts and insights
+5. **SMS Alerts**: Set up notifications for air quality threshold breaches
+
+### Analytics Dashboard Features
+- **Interactive Charts**: Multiple visualization types for different insights
+- **Time Period Selection**: Analyze any date range from your historical data  
+- **Statistical Summary**: Key metrics including averages, peaks, and trends
+- **Export Options**: Download individual charts or comprehensive reports
+- **Real-time Updates**: Charts update automatically with new data

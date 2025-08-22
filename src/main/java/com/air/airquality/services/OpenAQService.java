@@ -220,8 +220,8 @@ public class OpenAQService {
             
             if (response.getStatusCode() == HttpStatus.OK && 
                 response.getBody() != null && 
-                !response.getBody().getResults().isEmpty()) {
-                
+                response.getBody().getResults() != null &&
+                !response.getBody().getResults().isEmpty()) {                
                 return parseAPIResponse(response.getBody(), city);
             }
         } catch (RestClientException e) {

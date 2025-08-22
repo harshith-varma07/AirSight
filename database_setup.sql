@@ -71,7 +71,7 @@ timestamp = CURRENT_TIMESTAMP;
 
 -- Create a sample admin user (password: admin123)
 INSERT INTO users (username, email, password, phone_number, city, alert_threshold) VALUES
-('admin', 'admin@airsight.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM.lbESZbYrHYgdHsLny', '+1234567890', 'Delhi', 100)
+('admin', 'admin@airsight.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM.lbESZbYrHYgdHsLny', '+91 9966383848', 'Delhi', 100)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 COMMIT;

@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDateInputs();
     
     loadDashboardData();
+    loadSupportedCities(); // Load footer cities
     setInterval(loadDashboardData, 300000); // Update every 5 minutes
 });
 
@@ -485,8 +486,11 @@ function showUserMenu() {
             <strong>${currentUser.username}</strong><br>
             <small style="color: var(--text-secondary);">${currentUser.email}</small>
         </div>
-        <a href="#" onclick="downloadReport()" style="display: block; padding: 0.5rem 0; color: var(--text-primary); text-decoration: none;">
-            <i class="fas fa-download"></i> Download Report
+        <a href="analytics.html" style="display: block; padding: 0.5rem 0; color: var(--text-primary); text-decoration: none;">
+            <i class="fas fa-chart-bar"></i> Analytics
+        </a>
+        <a href="#" onclick="seedHistoricalDataFromMenu()" style="display: block; padding: 0.5rem 0; color: var(--text-primary); text-decoration: none;">
+            <i class="fas fa-database"></i> Generate Sample Data
         </a>
         <a href="#" onclick="viewAlerts()" style="display: block; padding: 0.5rem 0; color: var(--text-primary); text-decoration: none;">
             <i class="fas fa-bell"></i> My Alerts
@@ -695,10 +699,10 @@ function getAQIColor(aqi) {
 
 function getAQIColorValue(aqi) {
     if (aqi <= 50) return 'var(--neon-green)';
-    if (aqi <= 100) return '#ffff00';
-    if (aqi <= 150) return '#ff8c00';
-    if (aqi <= 200) return '#ff0000';
-    return '#8b0000';
+    if (aqi <= 100) return '#f59e0b';
+    if (aqi <= 150) return '#f97316';
+    if (aqi <= 200) return '#ef4444';
+    return '#dc2626';
 }
 
 function animateValue(element, start, end, duration) {
@@ -942,3 +946,75 @@ async function loadHistoricalData() {
 setTimeout(() => {
     updateLastUpdatedTime();
 }, 1000);
+
+// Seed historical data from menu
+async function seedHistoricalDataFromMenu() {
+    const userMenu = document.querySelector('.user-menu');
+    if (userMenu) {
+        userMenu.remove();
+    }
+    
+    if (!confirm('This will generate 3 years of sample historical data for better analytics experience. This may take a few minutes. Continue?')) {
+        return;
+    }
+    
+    try {
+        showNotification('Starting historical data generation...', 'info');
+        
+        const response = await fetch(`${API_BASE_URL}/admin/seed-historical-data?years=3`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Historical data generation started! Check the Analytics page in a few minutes.', 'success');
+        } else {
+            showNotification(data.message || 'Failed to start data generation', 'error');
+        }
+    } catch (error) {
+        console.error('Error seeding data:', error);
+        showNotification('Error starting data generation', 'error');
+    }
+}
+
+// Navigation functions
+function showHome() {
+    // Already on home page, just refresh the dashboard
+    loadDashboardData();
+    
+    // Scroll to top
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+    
+    // Update active nav link
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    document.querySelector('.nav-link[onclick="showHome()"]').classList.add('active');
+}
+
+// Load supported cities for footer
+async function loadSupportedCities() {
+    const citiesDiv = document.getElementById('supportedCities');
+    if (!citiesDiv) return; // Footer might not exist on all pages
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/database-status`);
+        const data = await response.json();
+
+        if (data.success && data.availableCities && data.availableCities.length > 0) {
+            const citiesHTML = data.availableCities.map(city => 
+                `<span class="city-tag">${city}</span>`
+            ).join('');
+            
+            citiesDiv.innerHTML = citiesHTML;
+        } else {
+            citiesDiv.innerHTML = '<span class="no-cities">No cities available</span>';
+        }
+    } catch (error) {
+        citiesDiv.innerHTML = '<span class="error-cities">Unable to load cities</span>';
+    }
+}

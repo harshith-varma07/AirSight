@@ -18,10 +18,10 @@
                 <i class="fas fa-wind"></i> AirSight
             </div>
             <div class="nav-links">
-                <a href="#" class="nav-link">Dashboard</a>
-                <a href="#" class="nav-link">Cities</a>
-                <a href="#" class="nav-link">Reports</a>
-                <a href="#" class="nav-link">Alerts</a>
+                <a href="#" class="nav-link active" onclick="showHome()">Home</a>
+                <a href="analytics.html" class="nav-link">Analytics</a>
+                <a href="about.html" class="nav-link">About</a>
+                <a href="setup.html" class="nav-link">Setup</a>
                 <button class="login-btn" onclick="openModal('loginModal')">
                     <i class="fas fa-user"></i> Login
                 </button>
@@ -250,6 +250,31 @@
             </form>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4><i class="fas fa-code-branch"></i> Project</h4>
+                <a href="https://github.com/harshith-varma07/AirSight" target="_blank" class="footer-link">
+                    <i class="fab fa-github"></i> View on GitHub
+                </a>
+            </div>
+            <div class="footer-section">
+                <h4><i class="fas fa-map-marker-alt"></i> Supported Cities</h4>
+                <div id="supportedCities" class="supported-cities">
+                    <div class="loading-cities">
+                        <i class="fas fa-spinner fa-spin"></i> Loading cities...
+                    </div>
+                </div>
+            </div>
+            <div class="footer-section">
+                <h4><i class="fas fa-info"></i> About</h4>
+                <p>Real-time air quality monitoring with advanced analytics</p>
+                <p>&copy; 2025 AirSight. Built with Spring Boot & OpenAQ API</p>
+            </div>
+        </div>
+    </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
