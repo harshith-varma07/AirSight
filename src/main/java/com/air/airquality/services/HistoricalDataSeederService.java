@@ -3,6 +3,8 @@ package com.air.airquality.services;
 import com.air.airquality.model.AqiData;
 import com.air.airquality.repository.AqiDataRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +16,8 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
-// Removed @Order and CommandLineRunner to prevent automatic execution
-public class HistoricalDataSeederService {
+@Order(1) // Execute early in the startup process
+public class HistoricalDataSeederService implements CommandLineRunner {
     
     private static final Logger logger = LoggerFactory.getLogger(HistoricalDataSeederService.class);
     
@@ -36,18 +38,24 @@ public class HistoricalDataSeederService {
         "Sydney", new CityProfile(45, 28, 0.25, 0.15)
     );
     
-    // Manual seeding method - only called when explicitly requested
-    public void seedHistoricalData(int years) {
+    @Override
+    public void run(String... args) throws Exception {
         try {
-            LocalDateTime startDate = LocalDateTime.now().minus(years, ChronoUnit.YEARS);
-            LocalDateTime endDate = LocalDateTime.now();
+            // Check if we already have historical data
+            long existingRecords = aqiDataRepository.count();
+            LocalDateTime threeYearsAgo = LocalDateTime.now().minus(3, ChronoUnit.YEARS);
             
-            logger.info("Starting manual historical data seeding for past {} years...", years);
-            generateHistoricalData(startDate, endDate);
-            logger.info("Manual historical data seeding completed successfully");
+            // Only seed if we don't have much historical data
+            if (existingRecords < 10000) { // Less than 10k records means we need seeding
+                logger.info("Starting historical data seeding for past 3 years...");
+                generateHistoricalData(threeYearsAgo, LocalDateTime.now());
+                logger.info("Historical data seeding completed successfully");
+            } else {
+                logger.info("Historical data already exists ({} records), skipping seeding", existingRecords);
+            }
         } catch (Exception e) {
-            logger.error("Error during manual historical data seeding: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to seed historical data", e);
+            logger.error("Error during historical data seeding: {}", e.getMessage(), e);
+            // Don't fail the application startup
         }
     }
     
@@ -55,19 +63,16 @@ public class HistoricalDataSeederService {
         List<AqiData> batchData = new ArrayList<>();
         int batchSize = 1000;
         int totalRecords = 0;
-        int maxRecordsPerCity = 15000; // Limit to prevent excessive data generation
         
         for (String city : cityProfiles.keySet()) {
             logger.info("Generating historical data for {}", city);
             
             LocalDateTime currentTime = startDate;
             CityProfile profile = cityProfiles.get(city);
-            int recordsForCity = 0;
             
-            while (currentTime.isBefore(endDate) && recordsForCity < maxRecordsPerCity) {
+            while (currentTime.isBefore(endDate)) {
                 AqiData data = generateDataPoint(city, currentTime, profile);
                 batchData.add(data);
-                recordsForCity++;
                 
                 // Save in batches for performance
                 if (batchData.size() >= batchSize) {
@@ -81,17 +86,8 @@ public class HistoricalDataSeederService {
                 }
                 
                 // Generate data every 2-4 hours for realistic density
-                int hoursToAdd = ThreadLocalRandom.current().nextInt(2, 5);
-                currentTime = currentTime.plusHours(hoursToAdd);
-                
-                // Safety check to prevent infinite loops
-                if (recordsForCity > maxRecordsPerCity) {
-                    logger.warn("Reached maximum records limit for city {}, moving to next city", city);
-                    break;
-                }
+                currentTime = currentTime.plusHours(ThreadLocalRandom.current().nextInt(2, 5));
             }
-            
-            logger.info("Generated {} records for {}", recordsForCity, city);
         }
         
         // Save remaining data

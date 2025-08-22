@@ -1,0 +1,77 @@
+# MySQL Production Configuration for AirSight
+[mysqld]
+
+# Basic Settings
+user = mysql
+port = 3306
+basedir = /usr
+datadir = /var/lib/mysql
+tmpdir = /tmp
+socket = /var/run/mysqld/mysqld.sock
+pid-file = /var/run/mysqld/mysqld.pid
+
+# Character Set
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+init-connect = 'SET NAMES utf8mb4'
+
+# Connection Settings
+max_connections = 200
+max_user_connections = 150
+max_connect_errors = 1000
+back_log = 80
+
+# Performance Tuning
+key_buffer_size = 128M
+max_allowed_packet = 64M
+table_open_cache = 2048
+sort_buffer_size = 2M
+read_buffer_size = 2M
+read_rnd_buffer_size = 8M
+myisam_sort_buffer_size = 64M
+thread_cache_size = 50
+query_cache_type = 1
+query_cache_size = 64M
+query_cache_limit = 2M
+
+# InnoDB Settings
+default_storage_engine = InnoDB
+innodb_buffer_pool_size = 512M
+innodb_log_file_size = 128M
+innodb_log_buffer_size = 16M
+innodb_flush_log_at_trx_commit = 2
+innodb_lock_wait_timeout = 120
+innodb_file_per_table = 1
+
+# Binary Logging
+log-bin = mysql-bin
+binlog_format = row
+expire_logs_days = 7
+max_binlog_size = 100M
+
+# Error Logging
+log-error = /var/log/mysql/error.log
+
+# Slow Query Log
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+log_queries_not_using_indexes = 1
+
+# Security Settings
+local-infile = 0
+skip-show-database
+
+# Timeout Settings
+wait_timeout = 3600
+interactive_timeout = 3600
+net_read_timeout = 120
+net_write_timeout = 120
+
+[mysql]
+default-character-set = utf8mb4
+
+[client]
+default-character-set = utf8mb4
+port = 3306
+socket = /var/run/mysqld/mysqld.sock

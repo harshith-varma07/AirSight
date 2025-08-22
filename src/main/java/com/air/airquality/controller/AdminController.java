@@ -38,7 +38,8 @@ public class AdminController {
             // Start seeding in a separate thread to avoid timeout
             Thread seedingThread = new Thread(() -> {
                 try {
-                    seederService.seedHistoricalData(years);
+                    LocalDateTime startDate = LocalDateTime.now().minus(years, ChronoUnit.YEARS);
+                    seederService.generateHistoricalData(startDate, LocalDateTime.now());
                 } catch (Exception e) {
                     // Log error but don't fail the response
                     e.printStackTrace();
