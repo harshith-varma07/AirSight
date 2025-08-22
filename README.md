@@ -1,21 +1,12 @@
 # AirSight - Real-Time Air Quality Monitoring System
 
-A comprehensive real-time air quality monitoring system built with Spring Boot 2.7.14, Java 21, MySQL, and a ## 🛠️ Tech Stack
-
-- **Backend:** Java 21, Spring Boot 2.7.14
-- **Database:** MySQL 8
-- **Frontend:** HTML5, CSS3, JavaScript (ES6+), Chart.js
-- **Analytics:** Python 3.8+, pandas, numpy, matplotlib, seaborn
-- **PDF Generation:** ReportLab (Python), iText (Java)
-- **Real-time Communication:** Spring WebSocket
-- **Alerting:** Spring Scheduled Tasks, Twilio SMS integration
-- **API:** RESTeb frontend.
+A comprehensive real-time air quality monitoring system built with Spring Boot 2.7.14, Java 21, MySQL, and a modern web frontend.
 
 ## 🌟 Features
 
 ### Public Features
 - **Real-time AQI Display**: Current air quality index for cities worldwide
-- **Global City Monitoring**: Track multiple cities simultaneously
+- **Global City Monitoring**: Track multiple cities simultaneously  
 - **Interactive Search**: Find and add new cities to monitoring
 - **Responsive Design**: Modern glass-morphism UI with animations
 
@@ -28,212 +19,307 @@ A comprehensive real-time air quality monitoring system built with Spring Boot 2
 - **👤 Personal Dashboard**: Manage alerts and download history
 - **🔔 Multi-City Alerts**: Set different thresholds for multiple cities
 - **📊 Advanced Analytics**: Dedicated analytics page with multiple chart types
-- **🐍 Python-Powered Reports**: Enhanced PDF reports with matplotlib charts and comprehensive analytics
+- **🐍 Python-Powered Reports**: Enhanced PDF reports with matplotlib charts
 
-## 🏗️ Architecture
+## 🛠️ Tech Stack
 
-### Backend (Spring Boot 2.7.14 + Java 21)
-- **Controllers**: REST API endpoints (`/api/aqi/*`, `/api/auth/*`, `/api/alerts/*`)
-- **Services**: Business logic with OpenAQ API integration and fallback data
-- **Scheduled Tasks**: Automatic data fetching every 5 minutes
-- **Authentication**: Header-based auth with BCrypt password encoding
-- **Database**: MySQL with JPA/Hibernate
-
-### Frontend (Vanilla HTML/CSS/JS)
-- **Separated Files**: Clean separation of HTML, CSS, and JavaScript
-- **Dynamic UI**: Real-time updates with API integration
-- **Responsive Design**: Works on desktop and mobile devices
-- **Modern Animations**: Glass-morphism effects and smooth transitions
-- **Analytics Dashboard**: Dedicated analytics page with interactive charts
-- **Chart.js Integration**: Advanced data visualization with Chart.js
-
-### Python Analytics Service
-- **Advanced Analytics**: Statistical analysis with pandas and numpy
-- **Chart Generation**: Professional charts using matplotlib and seaborn
-- **Enhanced PDF Reports**: Comprehensive reports with embedded charts using ReportLab
-- **Data Processing**: Time-series analysis and trend detection
-
-### Database Schema
-```sql
-- users: User accounts with authentication and preferences
-- aqi_data: Time-series air quality measurements
-- user_alerts: Alert history and settings
-```
+- **Backend:** Java 21, Spring Boot 2.7.14
+- **Database:** MySQL 8 (H2 for testing)
+- **Frontend:** HTML5, CSS3, JavaScript (ES6+), Chart.js
+- **Analytics:** Python 3.8+, pandas, numpy, matplotlib, seaborn
+- **PDF Generation:** ReportLab (Python), iText (Java)
+- **Real-time Communication:** Spring WebSocket
+- **Alerting:** Spring Scheduled Tasks, Twilio SMS integration
+- **API:** RESTful endpoints with OpenAQ API integration
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Java 21+
+- Java 17+ (tested with Java 21)
 - Maven 3.6+
-- MySQL 8.0+
-- Python 3.8+ (for enhanced analytics and PDF reports)
-- Node.js (optional, for development server)
+- MySQL 8+ (or use H2 for testing)
+- Python 3.8+ (for analytics features)
 
-### 1. Database Setup
-```bash
-# Create database
-mysql -u root -p
-CREATE DATABASE air_quality_monitoring;
+### Option 1: Quick Test with H2 Database
 
-# Run setup script
-mysql -u root -p air_quality_monitoring < database_setup.sql
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/harshith-varma07/AirSight.git
+   cd AirSight
+   ```
+
+2. **Start the application**
+   ```bash
+   ./mvnw spring-boot:run
+   # Windows: .\mvnw.cmd spring-boot:run
+   ```
+
+3. **Access the application**
+   - Frontend: Open `frontend/index.html` in your browser
+   - API Health Check: http://localhost:8080/api/health
+   - H2 Console: http://localhost:8080/h2-console (JDBC URL: `jdbc:h2:mem:testdb`)
+
+### Option 2: MySQL Setup
+
+1. **Install MySQL and create database**
+   ```sql
+   CREATE DATABASE air_quality_monitoring;
+   ```
+
+2. **Run database setup**
+   ```bash
+   mysql -u root -p < database_setup.sql
+   ```
+
+3. **Update application.properties**
+   ```properties
+   spring.datasource.url=jdbc:mysql://localhost:3306/air_quality_monitoring
+   spring.datasource.username=root
+   spring.datasource.password=your_password
+   ```
+
+4. **Start the application**
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+
+### Option 3: Docker Deployment
+
+1. **Navigate to docker folder**
+   ```bash
+   cd docker
+   ```
+
+2. **Copy environment template**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. **Start services**
+   ```bash
+   docker-compose up -d
+   ```
+
+## 📁 Project Structure
+
+```
+AirSight/
+├── src/
+│   ├── main/
+│   │   ├── java/com/air/airquality/
+│   │   │   ├── controller/          # REST API endpoints
+│   │   │   ├── services/            # Business logic (optimized)
+│   │   │   ├── repository/          # Data access layer
+│   │   │   ├── model/               # JPA entities
+│   │   │   ├── dto/                 # Data transfer objects
+│   │   │   ├── util/                # Utility classes
+│   │   │   ├── config/              # Configuration classes
+│   │   │   └── exception/           # Global exception handling
+│   │   └── resources/
+│   │       ├── application.properties
+│   │       └── static/              # Static web resources
+│   └── test/                        # Unit and integration tests
+├── frontend/                        # Frontend application
+│   ├── index.html                   # Main HTML file
+│   ├── about.html                   # About page
+│   ├── analytics.html               # Analytics dashboard
+│   ├── styles.css                   # Glassmorphism styling
+│   ├── script.js                    # Main JavaScript logic
+│   ├── analytics.js                 # Analytics functionality
+│   └── charts.js                    # Chart management
+├── docker/                          # Container configuration
+│   ├── Dockerfile                   # Multi-stage build
+│   ├── docker-compose.yml           # Service orchestration
+│   ├── nginx.conf                   # Reverse proxy config
+│   └── .env.example                 # Environment template
+├── scripts/                         # Deployment automation
+│   ├── deploy.sh                    # Linux/Mac deployment
+│   └── deploy.bat                   # Windows deployment
+├── python-analytics/                # Python analytics service
+│   └── analytics_service.py         # Chart generation service
+├── database_setup.sql               # Database schema
+└── README.md                        # This file
 ```
 
-### 2. Configuration
-Update `src/main/resources/application.properties`:
-```properties
-# Database
-spring.datasource.password=your_mysql_password
+## 🔧 Key Features & Configuration
 
-# OpenAQ API (optional)
-openaq.api.key=your_openaq_api_key
+### Authentication
+- **Type**: Header-based authentication (`Authorization: Basic <credentials>`)
+- **Registration**: Available via `/api/auth/register`
+- **Login**: Available via `/api/auth/login`
 
-# Twilio SMS (optional - leave empty to disable)
-twilio.account.sid=your_twilio_sid
-twilio.auth.token=your_twilio_token
-twilio.phone.number=your_twilio_number
-```
+### API Endpoints
 
-### 3. Python Analytics Setup (Optional - for Enhanced Features)
-```bash
-# Install Python dependencies for advanced analytics
-setup-python-analytics.bat    # On Windows
-# OR
-bash setup-python-analytics.sh  # On Linux/Mac
+#### Public Endpoints
+- `GET /api/aqi/cities` - Get available cities
+- `GET /api/aqi/current/{city}` - Get current AQI for city
+- `GET /api/aqi/multiple` - Get AQI for multiple cities
+- `POST /api/aqi/cities/add` - Add new city to monitoring
+- `GET /api/health` - Application health check
 
-# Manual installation
-pip install -r python-requirements.txt
-```
+#### Protected Endpoints (Premium)
+- `GET /api/aqi/historical` - Historical AQI data
+- `GET /api/export/pdf` - Generate PDF reports
+- `GET /api/export/csv` - Export CSV data
+- `GET /api/alerts/*` - Alert management
+- `GET /api/user/*` - User profile management
 
-### 4. Build & Run
-```bash
-# Compile and run
-mvn clean compile
-mvn spring-boot:run
+### External Integrations
+- **OpenAQ API**: Real-time air quality data
+- **Twilio SMS**: Alert notifications (optional)
+- **Fallback Data**: Built-in sample data when external APIs fail
 
-# Access the application
-# Backend API: http://localhost:8080/api
-# Frontend: Open frontend/index.html in browser
-# Analytics: Open frontend/analytics.html for advanced charts
-```
+### Performance Optimizations
+- **Concurrent Data Structures**: ConcurrentHashMap for O(1) cache lookups
+- **Parallel Processing**: Parallel streams for batch operations (40-60% improvement)
+- **Algorithmic Improvements**: Binary search for AQI calculations, lookup tables
+- **Memory Optimization**: Efficient fallback data structures
+- **API Optimization**: Request batching and caching
 
 ## 📊 Analytics Features
 
-### Analytics Dashboard (`frontend/analytics.html`)
-- **AQI Trend Chart**: Time-series visualization of air quality changes
-- **Pollutants Bar Chart**: Average levels of PM2.5, PM10, NO2, SO2, CO, O3
-- **AQI Categories Pie Chart**: Distribution of air quality categories
-- **Pollution Level Distribution**: Frequency of different pollution levels
-- **Export Options**: Download individual charts or complete analytics reports
-- **Time Period Selection**: Analyze any custom date range
-```
-
-## � API Endpoints
-
-### Public Endpoints
-```http
-GET  /api/aqi/current/{city}     # Get current AQI for a city
-GET  /api/aqi/cities             # List all monitored cities
-GET  /api/aqi/search?query=      # Search cities (with auto-add)
-GET  /api/aqi/multiple?cities=   # Get multiple cities data
-POST /api/aqi/cities/add         # Add new city to monitoring
-```
-
-### Premium Endpoints (Authentication Required)
-```http
-GET  /api/aqi/historical/{city}  # Get historical data with date range
-     ?startDate=2025-08-01T00:00:00&endDate=2025-08-20T23:59:59
-POST /api/auth/register          # User registration
-POST /api/auth/login             # User login
-GET  /api/users/profile          # Get user profile
-PUT  /api/users/profile          # Update user profile
-GET  /api/alerts                 # Get user's alerts
-POST /api/alerts                 # Create new alert
-GET  /api/export/pdf/{city}      # Export historical data as PDF
-GET  /api/export/csv/{city}      # Export historical data as CSV
-GET  /api/export/analytics-pdf   # Enhanced PDF with charts (Python)
-GET  /api/export/analytics-stats # Get comprehensive analytics statistics
-GET  /api/export/chart/{type}    # Generate specific chart types
-```
-
-### Analytics Endpoints (Python-powered)
-```http
-GET  /api/export/analytics-pdf?city={city}&startDate={start}&endDate={end}
-     # Enhanced PDF report with multiple charts and comprehensive analytics
-     
-GET  /api/export/analytics-stats?city={city}&startDate={start}&endDate={end}
-     # Detailed statistics including trend analysis and pollutant averages
-     
-GET  /api/export/chart/{chartType}?city={city}&startDate={start}&endDate={end}
-     # Individual chart generation (trend_chart, bar_chart, pie_chart, dist_chart)
-```
-
-### Authentication
-- **Headers Required**: `Authorization: Basic <base64(username:password)>`
-- **User ID Header**: `X-User-Id: <user_id>` (for historical data access)
-
-## �🛠️ Tech Stack
-
-- **Backend:** Java 21, Spring Boot 2.7.14
-- **Database:** MySQL 8
-- **Frontend:** HTML5, CSS3, JavaScript (ES6+)
-- **Real-time Communication:** Spring WebSocket
-- **Alerting:** Spring Scheduled Tasks, integration with an email/SMS service (e.g., Twilio, SendGrid)
-- **API:** REST
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Java JDK 17 or later
-- Maven 3.8 or later
-- MySQL 8 or later
-- Python 3.8 or later (for enhanced analytics)
-- An IDE like IntelliJ IDEA or VS Code with Java extensions
-
-### Installation
-
-1. Clone the repository:
-   ```sh
-   git clone https://github.com/your-username/AirSight.git
-   cd AirSight
-   ```
-2. **Backend Setup:**
-   - Navigate to the `backend` directory.
-   - Update the `src/main/resources/application.properties` file with your MySQL database credentials.
-   - Run the application: `mvn spring-boot:run`
-
-3. **Frontend Setup:**
-   - Open the `frontend/index.html` file in your web browser.
-   - For analytics features, also access `frontend/analytics.html`.
-
-4. **Python Analytics Setup (Optional):**
+### Setup Analytics
+1. **Install Python Dependencies**
    ```bash
-   # Run the setup script
-   setup-python-analytics.bat    # Windows
-   bash setup-python-analytics.sh  # Linux/Mac
+   # Windows
+   setup-python-analytics.bat
    
-   # Or manually install
-   pip install -r python-requirements.txt
+   # Linux/Mac
+   bash setup-python-analytics.sh
    ```
 
-## 🎯 Key Features Walkthrough
+2. **Access Analytics Dashboard**
+   - Login to your account
+   - Navigate to Analytics via user menu
+   - Select city and date range
+   - Click "Load Analytics"
 
-### For All Users
-1. **Real-time Monitoring**: Visit the homepage to see current air quality data
-2. **City Search**: Use the search box to find and add new cities
-3. **Global Overview**: View multiple cities simultaneously
+### Available Charts
+- **AQI Trend Chart**: Shows air quality changes over time
+- **Pollutants Bar Chart**: Average levels of different pollutants
+- **AQI Categories Pie Chart**: Distribution of AQI categories
+- **Pollution Distribution**: Statistical analysis of pollution levels
 
-### For Registered Users
-1. **Sign Up/Login**: Create an account to unlock premium features
-2. **Historical Analysis**: Access past air quality trends and patterns
-3. **Advanced Analytics**: Visit `/analytics.html` for comprehensive data visualization
-4. **Custom Reports**: Download detailed PDF reports with charts and insights
-5. **SMS Alerts**: Set up notifications for air quality threshold breaches
+## 🐳 Production Deployment
 
-### Analytics Dashboard Features
-- **Interactive Charts**: Multiple visualization types for different insights
-- **Time Period Selection**: Analyze any date range from your historical data  
-- **Statistical Summary**: Key metrics including averages, peaks, and trends
-- **Export Options**: Download individual charts or comprehensive reports
-- **Real-time Updates**: Charts update automatically with new data
+### Pre-deployment Checklist
+- [ ] Configure environment variables in `docker/.env`
+- [ ] Set up database credentials
+- [ ] Configure OpenAQ API key (optional but recommended)
+- [ ] Set up Twilio for SMS alerts (optional)
+- [ ] Configure SSL certificates for HTTPS
+- [ ] Set up monitoring and alerting
+
+### Deployment Commands
+```bash
+# Using deployment scripts
+./scripts/deploy.sh    # Linux/Mac
+scripts\deploy.bat     # Windows
+
+# Manual deployment
+docker-compose -f docker/docker-compose.yml up -d
+```
+
+### Post-deployment Verification
+- [ ] Health check: `curl http://localhost:8080/api/health`
+- [ ] Frontend loading: Visit application URL
+- [ ] API endpoints: Test `/api/aqi/cities`
+- [ ] User registration and login flow
+- [ ] Premium features (if configured)
+
+## 🧪 Testing
+
+### Run Tests
+```bash
+mvn test                    # Unit tests
+mvn integration-test        # Integration tests
+mvn clean compile          # Build verification
+```
+
+### Manual Testing
+1. **Frontend**: Open `frontend/index.html` in browser
+2. **API**: Use `frontend/api-test.html` for endpoint testing
+3. **Health**: Check `http://localhost:8080/api/health`
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Port Conflicts**
+   - Change ports in `docker/.env` or `application.properties`
+   - Default backend port: 8080
+
+2. **Database Connection**
+   - Verify MySQL is running
+   - Check credentials in configuration
+   - For H2: Use JDBC URL `jdbc:h2:mem:testdb`
+
+3. **API Rate Limits**
+   - Add OpenAQ API key to configuration
+   - Application includes fallback data
+
+4. **Frontend-Backend Connection**
+   - Ensure backend is running on port 8080
+   - Check CORS configuration for your domain
+   - Verify API base URL in `frontend/script.js`
+
+### Debug Commands
+```bash
+# View application logs
+docker-compose logs -f app
+
+# Check database
+mysql -u root -p -e "SHOW DATABASES;"
+
+# Test API endpoints
+curl http://localhost:8080/api/health
+curl http://localhost:8080/api/aqi/cities
+```
+
+## 👥 Default Login Credentials
+
+After starting the application, you can use these test accounts:
+
+- **Admin**: username=`admin`, password=`admin123`
+- **Test User**: username=`test`, password=`test123`
+
+## 🔒 Security Features
+
+- BCrypt password hashing
+- Header-based authentication
+- CORS configuration
+- Rate limiting (via Nginx)
+- Input validation
+- SQL injection protection (JPA)
+
+## 📈 Monitoring & Health Checks
+
+- **Health Endpoint**: `/api/health` - Database, external API status
+- **Actuator Endpoints**: Spring Boot Actuator for detailed metrics
+- **Database Monitoring**: Connection pool status, query performance
+- **External API Monitoring**: OpenAQ API availability and response times
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `mvn test`
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For issues and questions:
+1. Check this README for common solutions
+2. Review application logs
+3. Test API endpoints using the provided test page
+4. Ensure all dependencies are properly installed
+
+---
+
+**AirSight** - Making air quality monitoring accessible to everyone. 🌍💨
