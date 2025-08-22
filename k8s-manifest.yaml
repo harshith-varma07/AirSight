@@ -1,0 +1,203 @@
+# Kubernetes deployment manifests for Google Kubernetes Engine (GKE)
+# This file contains all necessary resources for deploying AirSight on GKE
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: airsight
+  labels:
+    name: airsight
+
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airsight-config
+  namespace: airsight
+data:
+  ENVIRONMENT: "production"
+  APP_PORT: "8080"
+  LOG_LEVEL: "INFO"
+  SHOW_SQL: "false"
+  TZ: "UTC"
+  OPENAQ_API_URL: "https://api.openaq.org/v2/latest"
+  OPENAQ_TIMEOUT: "10000"
+  JAVA_OPTS: "-Xmx1536m -Xms768m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+  GOOGLE_CLOUD_LOGGING_ENABLED: "true"
+  GOOGLE_CLOUD_MONITORING_ENABLED: "true"
+
+---
+# Secret for sensitive data (create manually or via external-secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: airsight-secrets
+  namespace: airsight
+type: Opaque
+data:
+  # Base64 encoded values - update these with actual values
+  DB_USERNAME: YWlyc2lnaHRfdXNlcg==  # airsight_user
+  DB_PASSWORD: YWlyc2lnaHRfc2VjdXJlX3Bhc3N3b3JkXzIwMjQ=  # airsight_secure_password_2024
+  OPENAQ_API_KEY: eW91cl9vcGVuYXFfYXBpX2tleV9oZXJl  # your_openaq_api_key_here
+  TWILIO_ACCOUNT_SID: eW91cl90d2lsaW9fYWNjb3VudF9zaWQ=  # your_twilio_account_sid
+  TWILIO_AUTH_TOKEN: eW91cl90d2lsaW9fYXV0aF90b2tlbg==  # your_twilio_auth_token
+  TWILIO_PHONE_NUMBER: KzEyMzQ1Njc4OTA=  # +1234567890
+
+---
+# Deployment for AirSight Application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airsight-app
+  namespace: airsight
+  labels:
+    app: airsight-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: airsight-app
+  template:
+    metadata:
+      labels:
+        app: airsight-app
+    spec:
+      containers:
+      - name: airsight
+        image: gcr.io/PROJECT_ID/airsight:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DATABASE_URL
+          value: "jdbc:mysql://127.0.0.1:3306/airqualitydb?cloudSqlInstance=PROJECT_ID:REGION:INSTANCE_NAME&socketFactory=com.google.cloud.sql.mysql.SocketFactory&useSSL=false"
+        envFrom:
+        - configMapRef:
+            name: airsight-config
+        - secretRef:
+            name: airsight-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      # Cloud SQL Proxy sidecar
+      - name: cloudsql-proxy
+        image: gcr.io/cloudsql-docker/gce-proxy:1.33.2
+        command:
+          - "/cloud_sql_proxy"
+          - "-instances=PROJECT_ID:REGION:INSTANCE_NAME=tcp:3306"
+          - "-credential_file=/secrets/cloudsql/key.json"
+        securityContext:
+          runAsNonRoot: true
+        volumeMounts:
+        - name: cloudsql-instance-credentials
+          mountPath: /secrets/cloudsql
+          readOnly: true
+      volumes:
+      - name: cloudsql-instance-credentials
+        secret:
+          secretName: cloudsql-instance-credentials
+
+---
+# Service for AirSight Application
+apiVersion: v1
+kind: Service
+metadata:
+  name: airsight-service
+  namespace: airsight
+  labels:
+    app: airsight-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: airsight-app
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: airsight-hpa
+  namespace: airsight
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: airsight-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: airsight-ingress
+  namespace: airsight
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "airsight-ip"
+    networking.gke.io/managed-certificates: "airsight-ssl-cert"
+spec:
+  rules:
+  - host: your-domain.com
+    http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: airsight-service
+            port:
+              number: 80
+
+---
+# Managed SSL Certificate
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: airsight-ssl-cert
+  namespace: airsight
+spec:
+  domains:
+    - your-domain.com

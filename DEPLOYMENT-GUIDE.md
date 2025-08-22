@@ -1,444 +1,387 @@
-# 🚀 AirSight Production Deployment Guide
+# 🚀 AirSight Google Cloud Platform Deployment Guide
 
-This guide provides step-by-step instructions for deploying AirSight in production environments using Docker.
+This comprehensive guide provides step-by-step instructions for deploying AirSight on Google Cloud Platform using various services including Cloud Run, App Engine, and Google Kubernetes Engine (GKE).
 
-## 📋 Pre-Deployment Checklist
+## 📋 Prerequisites
 
-### System Requirements
-- **OS**: Linux (Ubuntu 20.04+ recommended), Windows 10/11, or macOS 10.14+
-- **RAM**: 8GB minimum, 16GB recommended
-- **Storage**: 20GB free space minimum
-- **CPU**: 2 cores minimum, 4 cores recommended
-- **Docker**: Docker Engine 20.10+ and Docker Compose 2.0+
+### Required Tools
+- Google Cloud SDK (`gcloud` CLI) installed and authenticated
+- Docker installed locally
+- Git for cloning the repository
+- Java 17+ for local testing
 
-### Network Requirements
-- **Ports**: 80, 443 (Nginx), 8080 (Application), 3307 (MySQL), 6379 (Redis)
-- **Outbound**: HTTPS access to openaq.org, api.twilio.com (if SMS enabled)
-- **Domain**: Optional but recommended for production
+### Google Cloud Setup
+1. **Create or select a Google Cloud Project**
+   ```bash
+   # Create a new project
+   gcloud projects create airsight-prod --name="AirSight Production"
+   
+   # Set as default project
+   gcloud config set project airsight-prod
+   ```
+
+2. **Enable required APIs**
+   ```bash
+   gcloud services enable \
+     cloudbuild.googleapis.com \
+     run.googleapis.com \
+     sqladmin.googleapis.com \
+     secretmanager.googleapis.com \
+     container.googleapis.com \
+     appengine.googleapis.com
+   ```
+
+3. **Set up authentication**
+   ```bash
+   gcloud auth login
+   gcloud auth application-default login
+   ```
 
 ## 🏗️ Architecture Overview
 
 ```
-Internet
-    │
-    ▼
-┌─────────────┐
-│   Nginx     │  ← Reverse Proxy, SSL Termination, Load Balancing
-│  (Port 80)  │
-└─────────────┘
-    │
-    ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  AirSight   │────│   MySQL     │────│   Backup    │
-│Application  │    │ (Port 3307) │    │   Service   │
-│(Port 8080)  │    │             │    │             │
-└─────────────┘    └─────────────┘    └─────────────┘
-    │
-    ▼
-┌─────────────┐
-│    Redis    │  ← Caching Layer
-│ (Port 6379) │
-└─────────────┘
+Internet → Cloud Load Balancer → [Cloud Run/GKE/App Engine]
+                                           ↓
+                                    Cloud SQL (MySQL)
+                                           ↓
+                                    Memorystore (Redis)
 ```
 
-## 📁 Production File Structure
+## 🗄️ Database Setup (Cloud SQL)
 
-Create the following directory structure on your server:
+### 1. Create Cloud SQL Instance
+```bash
+# Create MySQL instance
+gcloud sql instances create airsight-mysql \
+    --database-version=MYSQL_8_0 \
+    --tier=db-f1-micro \
+    --region=us-central1 \
+    --storage-size=20GB \
+    --storage-type=SSD \
+    --storage-auto-increase \
+    --backup-start-time=02:00 \
+    --maintenance-window-day=SUN \
+    --maintenance-window-hour=03 \
+    --enable-bin-log
+
+# Set root password
+gcloud sql users set-password root \
+    --host=% \
+    --instance=airsight-mysql \
+    --password='your-secure-root-password'
+
+# Create application database
+gcloud sql databases create airqualitydb --instance=airsight-mysql
+
+# Create application user
+gcloud sql users create airsight_user \
+    --host=% \
+    --instance=airsight-mysql \
+    --password='your-secure-user-password'
+```
+
+### 2. Initialize Database Schema
+```bash
+# Import database schema
+gcloud sql import sql airsight-mysql gs://your-bucket/database_setup.sql \
+    --database=airqualitydb
+```
+
+## 🔐 Secrets Management
+
+Store sensitive configuration in Google Cloud Secret Manager:
 
 ```bash
-/opt/airsight/
-├── docker/
-│   ├── docker-compose.yml
-│   ├── docker-compose.prod.yml
-│   ├── .env
-│   ├── nginx.conf
-│   ├── mysql-prod.cnf
-│   ├── redis.conf
-│   └── ssl/
-│       ├── cert.pem
-│       └── key.pem
-├── backups/
-├── logs/
-└── monitoring/
+# Create secrets
+gcloud secrets create db-password --data-file=- <<< "your-secure-user-password"
+gcloud secrets create openaq-api-key --data-file=- <<< "your-openaq-api-key"
+gcloud secrets create twilio-account-sid --data-file=- <<< "your-twilio-sid"
+gcloud secrets create twilio-auth-token --data-file=- <<< "your-twilio-token"
+gcloud secrets create twilio-phone-number --data-file=- <<< "+1234567890"
+
+# Grant access to compute service account
+PROJECT_ID=$(gcloud config get-value project)
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+
+gcloud secrets add-iam-policy-binding db-password \
+    --member="serviceAccount:$PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
 ```
 
-## 🔧 Step-by-Step Deployment
+## 🚀 Deployment Options
 
-### Step 1: Server Preparation
+### Option 1: Cloud Run (Recommended for simplicity)
 
-```bash
-# Update system packages
-sudo apt update && sudo apt upgrade -y
+Cloud Run provides serverless container deployment with automatic scaling and pay-per-use billing.
 
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Create application directory
-sudo mkdir -p /opt/airsight
-sudo chown $USER:$USER /opt/airsight
-cd /opt/airsight
-
-# Logout and login to refresh group membership
-```
-
-### Step 2: Application Setup
-
+#### 1. Build and Deploy
 ```bash
 # Clone the repository
-git clone https://github.com/harshith-varma07/AirSight.git .
+git clone https://github.com/harshith-varma07/AirSight.git
+cd AirSight
 
-# Navigate to docker directory
-cd docker
+# Generate environment configuration
+./scripts/generate-env.sh
 
-# Copy and configure environment
-cp .env.example .env
-nano .env  # Edit configuration (see Configuration section below)
+# Update GCP-specific configuration
+cp docker/.env.gcp docker/.env
+# Edit docker/.env with your project details
+
+# Deploy using Cloud Build
+gcloud builds submit --config=cloudbuild.yaml
+
+# Alternative: Manual build and deploy
+# Build locally
+docker build -f docker/Dockerfile -t gcr.io/$PROJECT_ID/airsight .
+
+# Push to Container Registry
+docker push gcr.io/$PROJECT_ID/airsight
+
+# Deploy to Cloud Run
+gcloud run deploy airsight \
+    --image gcr.io/$PROJECT_ID/airsight \
+    --region us-central1 \
+    --platform managed \
+    --allow-unauthenticated \
+    --port 8080 \
+    --memory 2Gi \
+    --cpu 2 \
+    --min-instances 1 \
+    --max-instances 10 \
+    --set-cloudsql-instances $PROJECT_ID:us-central1:airsight-mysql \
+    --set-env-vars ENVIRONMENT=production,TZ=UTC
 ```
 
-### Step 3: SSL Certificate Setup (Recommended for Production)
-
+#### 2. Configure Custom Domain (Optional)
 ```bash
-# Create SSL directory
-mkdir -p ssl
-
-# Option A: Let's Encrypt (Recommended)
-sudo apt install certbot
-sudo certbot certonly --standalone -d your-domain.com
-sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ssl/cert.pem
-sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem ssl/key.pem
-
-# Option B: Self-signed certificate (Development only)
-openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes
-
-# Set proper permissions
-sudo chown $USER:$USER ssl/*
-chmod 600 ssl/key.pem
-chmod 644 ssl/cert.pem
+# Map custom domain
+gcloud run domain-mappings create \
+    --service airsight \
+    --domain your-domain.com \
+    --region us-central1
 ```
 
-### Step 4: Environment Configuration
+### Option 2: App Engine
 
-Edit `.env` file with production values:
+App Engine provides a fully managed platform with integrated services.
 
+#### 1. Deploy to App Engine
 ```bash
-# Required Configuration
-DB_ROOT_PASSWORD=your_very_secure_root_password_here_use_generator
-DB_USER=airsight_prod_user
-DB_PASSWORD=your_very_secure_db_password_here_use_generator
+# Initialize App Engine
+gcloud app create --region=us-central1
 
-# Optional but Recommended
-OPENAQ_API_KEY=your_openaq_api_key_from_openaq.org
+# Update app.yaml with your project details
+sed -i 's/PROJECT_ID/'$PROJECT_ID'/g' app.yaml
+sed -i 's/REGION/us-central1/g' app.yaml
+sed -i 's/INSTANCE_NAME/airsight-mysql/g' app.yaml
 
-# SMS Alerts (Optional)
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token  
-TWILIO_PHONE_NUMBER=+1234567890
-
-# Production Settings
-ENVIRONMENT=production
-LOG_LEVEL=INFO
-NGINX_PORT=80
-NGINX_SSL_PORT=443
-TZ=UTC
-
-# Admin Account
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your_secure_admin_password_here
-
-# Performance Tuning
-JAVA_OPTS=-Xmx2g -Xms1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+# Deploy application
+gcloud app deploy app.yaml --quiet
 ```
 
-### Step 5: Deploy Application
+### Option 3: Google Kubernetes Engine (GKE)
 
+GKE provides full Kubernetes orchestration with advanced scaling and management features.
+
+#### 1. Create GKE Cluster
 ```bash
-# Deploy with production configuration
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Create cluster
+gcloud container clusters create airsight-cluster \
+    --zone us-central1-a \
+    --num-nodes 2 \
+    --machine-type e2-standard-2 \
+    --enable-autoscaling \
+    --min-nodes 1 \
+    --max-nodes 5 \
+    --enable-autorepair \
+    --enable-autoupgrade \
+    --scopes https://www.googleapis.com/auth/cloud-platform
 
-# OR use the deployment script
-../scripts/deploy.sh production full
-
-# Monitor deployment
-docker-compose logs -f
+# Get credentials
+gcloud container clusters get-credentials airsight-cluster --zone us-central1-a
 ```
 
-### Step 6: Verify Deployment
-
+#### 2. Deploy to GKE
 ```bash
-# Check service status
-docker-compose ps
+# Update manifest with your project details
+sed -i 's/PROJECT_ID/'$PROJECT_ID'/g' k8s-manifest.yaml
+sed -i 's/REGION/us-central1/g' k8s-manifest.yaml
+sed -i 's/INSTANCE_NAME/airsight-mysql/g' k8s-manifest.yaml
 
-# Health checks
-curl -f http://localhost:8080/api/health
-curl -f http://localhost:8080/actuator/health
+# Create Cloud SQL service account key
+gcloud iam service-accounts create cloudsql-proxy
+gcloud iam service-accounts keys create key.json \
+    --iam-account cloudsql-proxy@$PROJECT_ID.iam.gserviceaccount.com
 
-# Test frontend
-curl -I http://localhost
+# Grant Cloud SQL permissions
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member serviceAccount:cloudsql-proxy@$PROJECT_ID.iam.gserviceaccount.com \
+    --role roles/cloudsql.client
 
-# Check logs for errors
-docker-compose logs app | grep ERROR
-docker-compose logs mysql | grep ERROR
-docker-compose logs nginx | grep error
+# Create secret for Cloud SQL proxy
+kubectl create secret generic cloudsql-instance-credentials \
+    --from-file=key.json=key.json -n airsight
+
+# Deploy application
+kubectl apply -f k8s-manifest.yaml
+
+# Get external IP
+kubectl get ingress airsight-ingress -n airsight
 ```
 
-## 🔒 Security Hardening
+## 🔧 Configuration Management
 
-### Firewall Configuration
+### Environment Variables
+The deployment automatically configures the following from your application properties:
 
+- **Database Configuration**: Extracted from `spring.datasource.*` properties
+- **Application Settings**: Server port, logging levels, performance tuning
+- **External APIs**: OpenAQ and Twilio configurations
+- **Google Cloud Integration**: Cloud SQL, Secret Manager, monitoring
+
+### Automatic Configuration Generation
+Use the provided script to generate environment files:
 ```bash
-# Enable UFW firewall
-sudo ufw enable
+# Generate standard and GCP-specific configurations
+./scripts/generate-env.sh
 
-# Allow essential ports
-sudo ufw allow 22    # SSH
-sudo ufw allow 80    # HTTP
-sudo ufw allow 443   # HTTPS
-
-# Block direct access to application services
-sudo ufw deny 8080   # Block direct application access
-sudo ufw deny 3307   # Block direct database access
-sudo ufw deny 6379   # Block direct Redis access
-
-# Check status
-sudo ufw status verbose
+# Files generated:
+# - docker/.env - Standard deployment configuration
+# - docker/.env.gcp - Google Cloud Platform specific configuration
 ```
 
-### Container Security
+## 📊 Monitoring and Logging
 
+### 1. Enable Google Cloud Monitoring
 ```bash
-# Run security scan
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /tmp:/tmp --name clair-scanner \
-  arminc/clair-scanner:latest --ip YOUR_LOCAL_IP airsight-app
-
-# Update all containers regularly
-docker-compose pull
-docker-compose up -d
+# Enable monitoring for your service
+gcloud run services update airsight \
+    --region us-central1 \
+    --set-env-vars GOOGLE_CLOUD_MONITORING_ENABLED=true
 ```
 
-### Database Security
-
+### 2. View Logs
 ```bash
-# Access MySQL container
-docker-compose exec mysql mysql -u root -p
+# Cloud Run logs
+gcloud logs read "resource.type=cloud_run_revision" --limit 50
 
-# Run security commands
-FLUSH PRIVILEGES;
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
-EXIT;
+# App Engine logs
+gcloud logs read "resource.type=gae_app" --limit 50
+
+# GKE logs
+gcloud logs read "resource.type=k8s_container" --limit 50
 ```
 
-## 📊 Monitoring & Logging
-
-### Log Management
-
+### 3. Set up Alerting
 ```bash
-# View all logs
-docker-compose logs -f
-
-# View specific service logs
-docker-compose logs -f app
-docker-compose logs -f mysql
-docker-compose logs -f nginx
-
-# Monitor resource usage
-docker-compose top
-docker stats
-
-# Set up log rotation
-sudo nano /etc/logrotate.d/airsight
+# Create alerting policy for high error rate
+gcloud alpha monitoring policies create --policy-from-file=monitoring-policy.yaml
 ```
 
-### Health Monitoring
+## 💰 Cost Optimization
 
+### Cloud Run Pricing
+- **CPU**: $0.00002400 per vCPU-second
+- **Memory**: $0.00000250 per GiB-second
+- **Requests**: $0.40 per million requests
+- **Minimum**: 1 instance, maximum: 10 instances
+
+### Estimated Monthly Costs
+- **Low Traffic** (1K requests/day): ~$5-10/month
+- **Medium Traffic** (10K requests/day): ~$15-30/month
+- **High Traffic** (100K requests/day): ~$50-100/month
+
+*Note: Costs include Cloud SQL ($7-15/month for db-f1-micro) and minimal Memorystore usage.*
+
+## 🔄 CI/CD Pipeline
+
+### 1. Set up Cloud Build Triggers
 ```bash
-# Create monitoring script
-cat > /opt/airsight/monitor.sh << 'EOF'
-#!/bin/bash
-# AirSight Health Monitor
-
-check_service() {
-    if curl -sf http://localhost:8080/api/health > /dev/null; then
-        echo "$(date): AirSight is healthy"
-    else
-        echo "$(date): AirSight health check failed!" 
-        # Send alert here (email, Slack, etc.)
-    fi
-}
-
-check_service >> /var/log/airsight-monitor.log
-EOF
-
-chmod +x /opt/airsight/monitor.sh
-
-# Add to crontab (check every 5 minutes)
-(crontab -l 2>/dev/null; echo "*/5 * * * * /opt/airsight/monitor.sh") | crontab -
+# Connect repository
+gcloud builds triggers create github \
+    --repo-name=AirSight \
+    --repo-owner=harshith-varma07 \
+    --branch-pattern="^main$" \
+    --build-config=cloudbuild.yaml
 ```
 
-## 💾 Backup Strategy
+### 2. Automated Deployment
+The `cloudbuild.yaml` configuration provides:
+- Automated testing and building
+- Container image creation and publishing
+- Deployment to Cloud Run
+- Environment-specific configuration
 
-### Database Backup
-
-```bash
-# Create backup script
-cat > /opt/airsight/backup.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR="/opt/airsight/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-DB_NAME="airqualitydb"
-
-# Create backup directory
-mkdir -p $BACKUP_DIR
-
-# Database backup
-docker-compose exec -T mysql mysqldump -u root -p$DB_ROOT_PASSWORD $DB_NAME | gzip > $BACKUP_DIR/db_backup_$DATE.sql.gz
-
-# Keep only last 30 days of backups
-find $BACKUP_DIR -name "db_backup_*.sql.gz" -mtime +30 -delete
-
-echo "$(date): Database backup completed: db_backup_$DATE.sql.gz"
-EOF
-
-chmod +x /opt/airsight/backup.sh
-
-# Schedule daily backup at 2 AM
-(crontab -l 2>/dev/null; echo "0 2 * * * /opt/airsight/backup.sh") | crontab -
-```
-
-### Application Data Backup
-
-```bash
-# Backup volumes
-docker run --rm -v airsight_mysql_data_prod:/data -v /opt/airsight/backups:/backup alpine tar czf /backup/mysql_data_$(date +%Y%m%d).tar.gz -C /data .
-
-docker run --rm -v airsight_redis_data_prod:/data -v /opt/airsight/backups:/backup alpine tar czf /backup/redis_data_$(date +%Y%m%d).tar.gz -C /data .
-```
-
-## 🔄 Updates & Maintenance
+## 🛠️ Maintenance and Updates
 
 ### Application Updates
-
 ```bash
-# Pull latest changes
-cd /opt/airsight
-git pull origin main
+# Deploy new version
+gcloud builds submit --config=cloudbuild.yaml
 
-# Rebuild and deploy
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-
-# Verify update
-curl -f http://localhost:8080/api/health
+# Rollback if needed
+gcloud run services update airsight \
+    --image gcr.io/$PROJECT_ID/airsight:previous-build-id \
+    --region us-central1
 ```
 
-### System Maintenance
-
+### Database Maintenance
 ```bash
-# Clean up unused Docker resources
-docker system prune -a
+# Create backup
+gcloud sql backups create \
+    --instance=airsight-mysql \
+    --description="Manual backup before update"
 
-# Update system packages
-sudo apt update && sudo apt upgrade -y
-
-# Restart services if needed
-docker-compose restart
+# Apply maintenance updates
+gcloud sql instances patch airsight-mysql \
+    --maintenance-window-day=SUN \
+    --maintenance-window-hour=3
 ```
 
 ## 🚨 Troubleshooting
 
 ### Common Issues
 
-**Service won't start:**
-```bash
-# Check logs
-docker-compose logs service_name
+1. **Cloud SQL Connection Issues**
+   ```bash
+   # Check Cloud SQL proxy logs
+   gcloud logs read "resource.type=cloud_run_revision" --filter="textPayload:cloud_sql_proxy"
+   
+   # Verify instance connection name
+   gcloud sql instances describe airsight-mysql --format="value(connectionName)"
+   ```
 
-# Check resource usage
-df -h  # Disk space
-free -h  # Memory usage
-docker system df  # Docker disk usage
+2. **Memory Issues**
+   ```bash
+   # Increase memory allocation
+   gcloud run services update airsight \
+       --memory 4Gi \
+       --region us-central1
+   ```
+
+3. **Cold Start Performance**
+   ```bash
+   # Set minimum instances
+   gcloud run services update airsight \
+       --min-instances 2 \
+       --region us-central1
+   ```
+
+### Health Checks
+```bash
+# Test application health
+curl https://your-service-url.run.app/api/health
+
+# Check service status
+gcloud run services describe airsight --region us-central1
 ```
 
-**Database connection issues:**
-```bash
-# Test database connectivity
-docker-compose exec app nc -z mysql 3306
+## 📞 Support and Resources
 
-# Check MySQL logs
-docker-compose logs mysql | tail -50
-
-# Reset database (CAUTION: This will delete all data)
-docker-compose down -v
-docker-compose up -d mysql
-```
-
-**Performance issues:**
-```bash
-# Monitor resource usage
-docker stats
-
-# Check slow queries (MySQL)
-docker-compose exec mysql mysql -u root -p -e "SHOW PROCESSLIST;"
-
-# Check Redis memory usage
-docker-compose exec redis redis-cli INFO memory
-```
-
-### Performance Tuning
-
-**Increase JVM memory:**
-```bash
-# In .env file
-JAVA_OPTS=-Xmx4g -Xms2g -XX:+UseG1GC -XX:+UseContainerSupport
-```
-
-**Optimize MySQL:**
-```bash
-# Edit mysql-prod.cnf
-innodb_buffer_pool_size = 1G  # Increase for more RAM
-max_connections = 300         # Increase for high traffic
-```
-
-**Scale with Docker Swarm:**
-```bash
-# Initialize swarm
-docker swarm init
-
-# Deploy stack
-docker stack deploy -c docker-compose.yml airsight
-
-# Scale application
-docker service scale airsight_app=3
-```
-
-## 📞 Support & Maintenance
-
-### Health Check URLs
-- Application: `http://your-domain/api/health`
-- Database: MySQL port 3307 (internal only)
-- Cache: Redis port 6379 (internal only)
-
-### Log Locations
-- Application: `/opt/airsight/logs/`
-- Nginx: Docker volume `nginx_logs`
-- MySQL: Docker volume `mysql_logs`
-
-### Configuration Files
-- Main config: `/opt/airsight/docker/.env`
-- Nginx: `/opt/airsight/docker/nginx.conf`
-- MySQL: `/opt/airsight/docker/mysql-prod.cnf`
-- Redis: `/opt/airsight/docker/redis.conf`
+- **Google Cloud Documentation**: [Cloud Run](https://cloud.google.com/run/docs), [App Engine](https://cloud.google.com/appengine/docs), [GKE](https://cloud.google.com/kubernetes-engine/docs)
+- **AirSight Issues**: [GitHub Issues](https://github.com/harshith-varma07/AirSight/issues)
+- **Google Cloud Support**: Available with paid support plans
 
 ---
 
-**🎉 Congratulations!** Your AirSight production deployment is now complete and ready to monitor air quality data 24/7!
+🎉 **Congratulations!** Your AirSight application is now running on Google Cloud Platform with enterprise-grade scalability, monitoring, and security.

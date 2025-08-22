@@ -1,0 +1,18 @@
+# Terraform variables for AirSight deployment
+# Copy this file to terraform.tfvars and update with your values
+
+# Required: Your Google Cloud Project ID
+project_id = "your-project-id"
+
+# Optional: Region for deployment (default: us-central1)
+region = "us-central1"
+
+# Optional: Zone for deployment (default: us-central1-a)
+zone = "us-central1-a"
+
+# Optional: Custom domain name for the application
+domain_name = "airsight.example.com"
+
+# Optional: Cloud SQL instance tier (default: db-f1-micro)
+# Options: db-f1-micro, db-g1-small, db-n1-standard-1, etc.
+db_instance_tier = "db-f1-micro"

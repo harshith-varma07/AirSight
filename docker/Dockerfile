@@ -1,5 +1,5 @@
 # Multi-stage build for optimized image size
-FROM maven:3.9.4-eclipse-temurin-21-alpine AS builder
+FROM maven:3.9.4-eclipse-temurin-17-alpine AS builder
 WORKDIR /app
 
 # Copy pom.xml first for better Docker layer caching
@@ -11,7 +11,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # Production stage
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Create non-root user for security
