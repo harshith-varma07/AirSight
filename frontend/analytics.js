@@ -36,12 +36,14 @@ function createParticles() {
     }
 }
 
-// Initialize date inputs with default values (last 7 days)
+// Initialize date inputs with default values (optimized ranges for 3 years of data)
 function initializeDateInputs() {
     const now = new Date();
     const endDate = new Date(now);
     const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - 7);
+    
+    // Set default to last 90 days for optimal performance while showing meaningful data
+    startDate.setDate(startDate.getDate() - 90);
     
     const formatDateForInput = (date) => {
         const year = date.getFullYear();
@@ -52,8 +54,55 @@ function initializeDateInputs() {
         return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
     
+    // Set the input values
     document.getElementById('startDate').value = formatDateForInput(startDate);
     document.getElementById('endDate').value = formatDateForInput(endDate);
+    
+    // Set the input min/max values to cover the full 3-year period
+    const threeYearsAgo = new Date(now);
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    
+    startDateInput.min = formatDateForInput(threeYearsAgo);
+    startDateInput.max = formatDateForInput(now);
+    endDateInput.min = formatDateForInput(threeYearsAgo);
+    endDateInput.max = formatDateForInput(now);
+}
+
+// Quick date range selection function
+function setDateRange(days) {
+    const now = new Date();
+    const endDate = new Date(now);
+    const startDate = new Date(now);
+    
+    // Subtract the specified number of days
+    startDate.setDate(startDate.getDate() - days);
+    
+    const formatDateForInput = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    // Set the input values
+    document.getElementById('startDate').value = formatDateForInput(startDate);
+    document.getElementById('endDate').value = formatDateForInput(endDate);
+    
+    // Update button states
+    document.querySelectorAll('.date-range-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Mark the clicked button as active
+    event.target.classList.add('active');
+    
+    // Show a subtle notification
+    showNotification(`Date range set to last ${days} days`, 'success');
 }
 
 // Check user authentication status
@@ -176,7 +225,9 @@ async function loadAnalyticsData() {
                 city: city,
                 startDate: startDate,
                 endDate: endDate,
-                data: data.data
+                data: data.data,
+                wasSampled: data.wasSampled || false,
+                daysCovered: data.daysCovered || 0
             };
             
             // Display all analytics
@@ -184,7 +235,14 @@ async function loadAnalyticsData() {
             createAllCharts();
             showDownloadSection();
             
-            showNotification(`Loaded ${data.data.length} data points for ${city}`, 'success');
+            let successMessage = `Loaded ${data.data.length} data points for ${city}`;
+            if (data.wasSampled) {
+                successMessage += ` (sampled from larger dataset for optimal performance)`;
+            }
+            if (data.daysCovered && data.daysCovered > 365) {
+                successMessage += ` spanning ${data.daysCovered} days`;
+            }
+            showNotification(successMessage, 'success');
         } else {
             showNoDataMessage();
             // Check if we can seed historical data

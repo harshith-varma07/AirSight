@@ -21,11 +21,8 @@ public class CorsConfig {
         
         // Allow specific origins including file protocol
         configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000",
-            "http://127.0.0.1:5500",
-            "http://localhost:8080",
-            "file://",
-            "null" // This allows file:// protocol access
+            "https://harshith-varma07.github.io" ,
+            "https://harshith-varma07.github.io/AirSight"// This allows file:// protocol access
         ));
         
         // Allow all HTTP methods

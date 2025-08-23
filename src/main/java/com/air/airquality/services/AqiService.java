@@ -5,6 +5,7 @@ import com.air.airquality.model.AqiData;
 import com.air.airquality.repository.AqiDataRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,13 +53,20 @@ public class AqiService {
     }
     
     // Cleanup old data (maintenance method)
+    @Transactional
     public void cleanupOldData(int daysToKeep) {
         try {
             LocalDateTime cutoffDate = LocalDateTime.now().minusDays(daysToKeep);
+            long recordsBefore = aqiDataRepository.count();
             aqiDataRepository.deleteOldData(cutoffDate);
-            logger.info("Cleaned up AQI data older than {} days", daysToKeep);
+            long recordsAfter = aqiDataRepository.count();
+            long deletedRecords = recordsBefore - recordsAfter;
+            
+            logger.info("Cleaned up {} AQI records older than {} days (cutoff: {})", 
+                       deletedRecords, daysToKeep, cutoffDate);
         } catch (Exception e) {
-            logger.error("Error cleaning up old data: {}", e.getMessage());
+            logger.error("Error cleaning up old data: {}", e.getMessage(), e);
+            throw e; // Re-throw to ensure transaction rollback
         }
     }
     

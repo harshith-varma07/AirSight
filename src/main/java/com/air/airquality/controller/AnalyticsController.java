@@ -45,9 +45,20 @@ public class AnalyticsController {
                         .body("Analytics PDF export requires user authentication".getBytes());
             }
 
-            // Set default dates if not provided
+            // Set default dates if not provided - optimize for 3-year data retention
             if (endDate == null) endDate = LocalDateTime.now();
-            if (startDate == null) startDate = endDate.minusDays(7);
+            if (startDate == null) startDate = endDate.minusDays(90); // Default to last 90 days for better performance
+
+            // Validate date range to prevent excessive data requests
+            long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate);
+            if (daysBetween > 1095) { // More than 3 years
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Date range cannot exceed 3 years (1095 days)".getBytes());
+            }
+            
+            if (daysBetween > 365) { // More than 1 year - warn about performance
+                System.out.println("Warning: Large date range requested (" + daysBetween + " days) for analytics PDF");
+            }
 
             // Get historical data
             List<AqiResponse> historicalData = aqiService.getHistoricalData(city, startDate, endDate);
@@ -55,6 +66,19 @@ public class AnalyticsController {
             if (historicalData == null || historicalData.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body("No data available for the specified period".getBytes());
+            }
+            
+            // Limit data size for performance - sample data if too large
+            if (historicalData.size() > 5000) {
+                System.out.println("Sampling large dataset: " + historicalData.size() + " records");
+                // Sample every nth record to keep dataset manageable
+                int step = historicalData.size() / 5000;
+                List<AqiResponse> sampledData = new java.util.ArrayList<>();
+                for (int i = 0; i < historicalData.size(); i += step) {
+                    sampledData.add(historicalData.get(i));
+                }
+                historicalData = sampledData;
+                System.out.println("Sampled to: " + historicalData.size() + " records");
             }
 
             // Convert data to JSON for Python script

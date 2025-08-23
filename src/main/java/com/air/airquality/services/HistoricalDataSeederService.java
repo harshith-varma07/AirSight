@@ -3,6 +3,7 @@ package com.air.airquality.services;
 import com.air.airquality.model.AqiData;
 import com.air.airquality.repository.AqiDataRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,13 @@ public class HistoricalDataSeederService implements CommandLineRunner {
     @Autowired
     private AqiDataRepository aqiDataRepository;
     
+    // Flag to prevent concurrent seeding operations
+    private volatile boolean isSeeding = false;
+    
+    // Configuration to disable seeding in test environment
+    @Value("${app.historical-data.seed.enabled:true}")
+    private boolean seedingEnabled;
+    
     // Cities with their typical AQI ranges and seasonal patterns
     private final Map<String, CityProfile> cityProfiles = Map.of(
         "Delhi", new CityProfile(120, 80, 0.7, 0.4), // High pollution, high variation, seasonal
@@ -40,18 +48,24 @@ public class HistoricalDataSeederService implements CommandLineRunner {
     
     @Override
     public void run(String... args) throws Exception {
+        // Skip seeding if disabled (e.g., in test environment)
+        if (!seedingEnabled) {
+            logger.info("Historical data seeding is disabled");
+            return;
+        }
+        
         try {
             // Check if we already have historical data
             long existingRecords = aqiDataRepository.count();
             LocalDateTime threeYearsAgo = LocalDateTime.now().minus(3, ChronoUnit.YEARS);
             
-            // Only seed if we don't have much historical data
-            if (existingRecords < 10000) { // Less than 10k records means we need seeding
-                logger.info("Starting historical data seeding for past 3 years...");
+            // Only seed if we have very limited data (changed threshold)
+            if (existingRecords < 1000) { // Reduced threshold to prevent excessive seeding
+                logger.info("Database has {} records, starting historical data seeding for past 3 years...", existingRecords);
                 generateHistoricalData(threeYearsAgo, LocalDateTime.now());
                 logger.info("Historical data seeding completed successfully");
             } else {
-                logger.info("Historical data already exists ({} records), skipping seeding", existingRecords);
+                logger.info("Database already has {} records, skipping historical data seeding", existingRecords);
             }
         } catch (Exception e) {
             logger.error("Error during historical data seeding: {}", e.getMessage(), e);
@@ -60,43 +74,73 @@ public class HistoricalDataSeederService implements CommandLineRunner {
     }
     
     public void generateHistoricalData(LocalDateTime startDate, LocalDateTime endDate) {
-        List<AqiData> batchData = new ArrayList<>();
-        int batchSize = 1000;
-        int totalRecords = 0;
+        // Prevent concurrent seeding operations
+        if (isSeeding) {
+            logger.warn("Historical data generation already in progress, skipping request");
+            return;
+        }
         
-        for (String city : cityProfiles.keySet()) {
-            logger.info("Generating historical data for {}", city);
+        isSeeding = true;
+        
+        try {
+            // Check if we already have data in this range to avoid duplicates
+            long existingDataInRange = aqiDataRepository.count();
             
-            LocalDateTime currentTime = startDate;
-            CityProfile profile = cityProfiles.get(city);
+            List<AqiData> batchData = new ArrayList<>();
+            int batchSize = 500; // Reduced batch size for better performance
+            int totalRecords = 0;
             
-            while (currentTime.isBefore(endDate)) {
-                AqiData data = generateDataPoint(city, currentTime, profile);
-                batchData.add(data);
+            logger.info("Starting data generation with batch size: {}", batchSize);
+            
+            for (String city : cityProfiles.keySet()) {
+                logger.info("Generating historical data for {} from {} to {}", city, startDate, endDate);
                 
-                // Save in batches for performance
-                if (batchData.size() >= batchSize) {
-                    aqiDataRepository.saveAll(batchData);
-                    totalRecords += batchData.size();
-                    batchData.clear();
+                LocalDateTime currentTime = startDate;
+                CityProfile profile = cityProfiles.get(city);
+                int cityRecords = 0;
+                
+                while (currentTime.isBefore(endDate) && cityRecords < 1000) { // Limit records per city
+                    AqiData data = generateDataPoint(city, currentTime, profile);
+                    batchData.add(data);
+                    cityRecords++;
                     
-                    if (totalRecords % 10000 == 0) {
-                        logger.info("Generated {} historical records so far...", totalRecords);
+                    // Save in batches for performance
+                    if (batchData.size() >= batchSize) {
+                        try {
+                            aqiDataRepository.saveAll(batchData);
+                            totalRecords += batchData.size();
+                            batchData.clear();
+                            
+                            if (totalRecords % 1000 == 0) {
+                                logger.info("Generated {} historical records so far...", totalRecords);
+                            }
+                        } catch (Exception e) {
+                            logger.warn("Error saving batch of historical data: {}", e.getMessage());
+                            batchData.clear(); // Clear the problematic batch and continue
+                        }
                     }
+                    
+                    // Generate data every 12-24 hours to match our update schedule
+                    currentTime = currentTime.plusHours(12 + (int)(Math.random() * 12));
                 }
                 
-                // Generate data every 2-4 hours for realistic density
-                currentTime = currentTime.plusHours(ThreadLocalRandom.current().nextInt(2, 5));
+                logger.info("Generated {} records for city: {}", cityRecords, city);
             }
+            
+            // Save remaining data
+            if (!batchData.isEmpty()) {
+                try {
+                    aqiDataRepository.saveAll(batchData);
+                    totalRecords += batchData.size();
+                } catch (Exception e) {
+                    logger.warn("Error saving final batch of historical data: {}", e.getMessage());
+                }
+            }
+            
+            logger.info("Generated {} total historical records for date range {} to {}", totalRecords, startDate, endDate);
+        } finally {
+            isSeeding = false;
         }
-        
-        // Save remaining data
-        if (!batchData.isEmpty()) {
-            aqiDataRepository.saveAll(batchData);
-            totalRecords += batchData.size();
-        }
-        
-        logger.info("Generated {} total historical records", totalRecords);
     }
     
     private AqiData generateDataPoint(String city, LocalDateTime timestamp, CityProfile profile) {

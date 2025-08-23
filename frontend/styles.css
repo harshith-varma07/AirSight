@@ -770,3 +770,67 @@ body::before {
     margin: 0.5rem 0;
     font-size: 0.9rem;
 }
+
+/* Date Range Buttons for Analytics */
+.date-range-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.date-range-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.date-range-btn:hover {
+    background: var(--primary-gradient);
+    color: white;
+    border-color: transparent;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.date-range-btn.active {
+    background: var(--primary-gradient);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+/* Enhanced Analytics Controls */
+.analytics-controls .controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    align-items: end;
+}
+
+.analytics-controls .form-group:last-child {
+    display: flex;
+    align-items: end;
+}
+
+/* Responsive adjustments for date range buttons */
+@media (max-width: 768px) {
+    .date-range-buttons {
+        flex-direction: column;
+    }
+    
+    .date-range-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .analytics-controls .controls-grid {
+        grid-template-columns: 1fr;
+    }
+}

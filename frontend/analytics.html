@@ -63,6 +63,17 @@
                     <input type="datetime-local" class="form-input" id="endDate">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Quick Date Ranges</label>
+                    <div class="date-range-buttons">
+                        <button type="button" class="btn-secondary date-range-btn" onclick="setDateRange(7)">Last 7 Days</button>
+                        <button type="button" class="btn-secondary date-range-btn" onclick="setDateRange(30)">Last 30 Days</button>
+                        <button type="button" class="btn-secondary date-range-btn" onclick="setDateRange(90)">Last 90 Days</button>
+                        <button type="button" class="btn-secondary date-range-btn" onclick="setDateRange(180)">Last 6 Months</button>
+                        <button type="button" class="btn-secondary date-range-btn" onclick="setDateRange(365)">Last Year</button>
+                        <button type="button" class="btn-secondary date-range-btn" onclick="setDateRange(1095)">Last 3 Years</button>
+                    </div>
+                </div>
+                <div class="form-group">
                     <button class="btn-primary" onclick="loadAnalyticsData()">
                         <i class="fas fa-chart-bar"></i> Load Analytics
                     </button>

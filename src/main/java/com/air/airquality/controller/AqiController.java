@@ -192,15 +192,45 @@ public class AqiController {
         try {
             String normalizedCity = normalizeCity(city);
             
-            // Default to last 30 days if dates not provided
+            // Default to last 90 days if dates not provided - optimized for 3-year retention
             if (endDate == null) {
                 endDate = LocalDateTime.now();
             }
             if (startDate == null) {
-                startDate = endDate.minusDays(30);
+                startDate = endDate.minusDays(90);
+            }
+            
+            // Validate date range to prevent excessive data requests
+            long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate);
+            if (daysBetween > 1095) { // More than 3 years
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("message", "Date range cannot exceed 3 years (1095 days)");
+                response.put("maxDaysAllowed", 1095);
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Log warning for large ranges
+            if (daysBetween > 365) {
+                logger.warn("Large date range requested for city {}: {} days", normalizedCity, daysBetween);
             }
             
             List<AqiResponse> historicalData = aqiService.getHistoricalData(normalizedCity, startDate, endDate);
+            
+            // Implement data sampling for very large datasets to improve frontend performance
+            boolean wasSampled = false;
+            if (historicalData.size() > 10000) {
+                logger.info("Sampling large dataset for city {}: {} records", normalizedCity, historicalData.size());
+                // Sample every nth record to keep dataset manageable
+                int step = Math.max(1, historicalData.size() / 10000);
+                List<AqiResponse> sampledData = new ArrayList<>();
+                for (int i = 0; i < historicalData.size(); i += step) {
+                    sampledData.add(historicalData.get(i));
+                }
+                historicalData = sampledData;
+                wasSampled = true;
+                logger.info("Sampled to {} records for better performance", historicalData.size());
+            }
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -209,6 +239,12 @@ public class AqiController {
             response.put("city", normalizedCity);
             response.put("startDate", startDate);
             response.put("endDate", endDate);
+            response.put("daysCovered", daysBetween);
+            response.put("wasSampled", wasSampled);
+            
+            if (wasSampled) {
+                response.put("note", "Large dataset was sampled for optimal performance");
+            }
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {

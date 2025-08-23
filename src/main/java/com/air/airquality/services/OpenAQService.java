@@ -202,14 +202,21 @@ public class OpenAQService {
         List<String> cities = getAvailableCities();
         logger.info("Updating data for {} cities", cities.size());
         
-        cities.parallelStream().forEach(city -> {
+        // Process cities sequentially to avoid overwhelming the API
+        for (String city : cities) {
             try {
                 getCurrentAqiData(city);
-                Thread.sleep(100); // Rate limiting
+                Thread.sleep(200); // Rate limiting - increased delay
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.warn("Update process interrupted");
+                break;
             } catch (Exception e) {
                 logger.warn("Failed to update city {}: {}", city, e.getMessage());
             }
-        });
+        }
+        
+        logger.info("Completed updating all cities data");
     }
 
     // Private helper methods
@@ -285,7 +292,8 @@ public class OpenAQService {
     }
 
     private boolean isRecentData(LocalDateTime timestamp) {
-        return timestamp.isAfter(LocalDateTime.now().minusMinutes(15));
+        // With 12-hour update schedule, consider data recent if it's within 24 hours
+        return timestamp.isAfter(LocalDateTime.now().minusHours(24));
     }
 
     private String normalizeCity(String city) {
@@ -330,7 +338,8 @@ public class OpenAQService {
         }
 
         public boolean isExpired() {
-            return timestamp.isBefore(LocalDateTime.now().minusMinutes(10));
+            // Cache for 6 hours since we update every 12 hours
+            return timestamp.isBefore(LocalDateTime.now().minusHours(6));
         }
 
         public AqiData getData() {
