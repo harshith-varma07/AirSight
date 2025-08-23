@@ -35,4 +35,43 @@ build/
 
 ### VS Code ###
 .vscode/
-logs/
+
+### Environment Files ###
+docker/.env
+.env
+*.env.local
+*.env.production
+
+### Terraform ###
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+### Docker ###
+.docker/
+
+### Temporary Files ###
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+### Database ###
+*.db
+*.sqlite
+*.sqlite3
+
+### IDE and Editor ###
+*.swp
+*.swo
+*~
+
+### OS Generated ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db

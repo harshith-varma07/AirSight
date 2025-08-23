@@ -1,6 +1,6 @@
 # AirSight - Real-Time Air Quality Monitoring System
 
-A comprehensive real-time air quality monitoring system built with Spring Boot 2.7.14, Java 21, MySQL, and a modern web frontend. Deploy anywhere with Docker in under 5 minutes! 🚀
+A comprehensive real-time air quality monitoring system built with Spring Boot 2.7.14, Java 17, MySQL, and a modern web frontend. Deploy anywhere with Docker in under 5 minutes! 🚀
 
 ## 🌟 Features
 
@@ -23,7 +23,7 @@ A comprehensive real-time air quality monitoring system built with Spring Boot 2
 
 ## 🛠️ Tech Stack
 
-- **Backend:** Java 21, Spring Boot 2.7.14
+- **Backend:** Java 17, Spring Boot 2.7.14
 - **Database:** MySQL 8 (H2 for development/testing)
 - **Cache:** Redis 7 (optional but recommended)
 - **Frontend:** HTML5, CSS3, JavaScript (ES6+), Chart.js
@@ -68,7 +68,7 @@ docker-compose up -d
 ### Option 2: 🔧 Development Setup (Local)
 
 **Prerequisites:**
-- Java 21 (recommended) or Java 17+
+- Java 17+ (Java 17 or higher recommended)
 - Maven 3.6+
 - MySQL 8+ or use H2 for testing
 
@@ -191,16 +191,27 @@ docker-compose top
 
 ```
 AirSight/
-├── 🚀 Quick Start Files
+├── 🚀 Quick Start & Deployment
 │   ├── scripts/
 │   │   ├── deploy.sh              # Linux/Mac deployment
-│   │   └── deploy.bat             # Windows deployment
+│   │   ├── deploy.bat             # Windows deployment  
+│   │   └── generate-env.sh        # Auto-generate configs
 │   ├── docker/
 │   │   ├── Dockerfile             # Multi-stage production build
 │   │   ├── docker-compose.yml     # Service orchestration
 │   │   ├── nginx.conf             # Reverse proxy config
 │   │   ├── redis.conf             # Redis configuration
-│   │   └── .env.example           # Environment template
+│   │   ├── .env.example           # Environment template
+│   │   ├── .env                   # Generated standard config
+│   │   └── .env.gcp               # Generated GCP config
+│   ├── terraform/                 # Infrastructure as Code
+│   │   ├── main.tf               # Terraform configuration
+│   │   ├── terraform.tfvars.example
+│   │   └── README.md             # Terraform deployment guide
+│   ├── cloudbuild.yaml            # Google Cloud Build config
+│   ├── app.yaml                   # App Engine config
+│   ├── k8s-manifest.yaml          # Kubernetes manifests
+│   ├── DEPLOYMENT-GUIDE.md        # Google Cloud deployment guide
 │   └── database_setup.sql         # Database schema & sample data
 │
 ├── 🏗️ Application Source
@@ -399,20 +410,24 @@ docker network inspect airsight_airsight-network
 
 ## 🚀 Deployment Checklist
 
-### Pre-deployment
-- [ ] Update `.env` with secure passwords
-- [ ] Configure OpenAQ API key (optional but recommended)
-- [ ] Set up Twilio for SMS alerts (optional)
+### Google Cloud Platform
+- [ ] Set up GCP project and enable APIs
+- [ ] Update `terraform/terraform.tfvars` with your project ID
+- [ ] Run `./scripts/generate-env.sh` to create configs
+- [ ] Deploy with `terraform apply` or `gcloud builds submit`
+- [ ] Update Secret Manager with API keys and credentials
+
+### Docker Deployment  
+- [ ] Run `./scripts/generate-env.sh` to generate configuration
+- [ ] Update `docker/.env` with secure passwords and API keys
 - [ ] Configure domain name and SSL certificates (production)
-- [ ] Review resource limits and scaling requirements
+- [ ] Run `docker-compose up -d` to start services
 
 ### Post-deployment
-- [ ] Verify health check: `curl http://your-domain/api/health`
-- [ ] Test user registration and login
-- [ ] Verify API endpoints are responding
-- [ ] Check application and system logs
-- [ ] Set up monitoring and alerting
-- [ ] Configure automated backups
+- [ ] Verify health check: `curl https://your-domain/api/health`
+- [ ] Test user registration and premium features
+- [ ] Configure monitoring and alerting
+- [ ] Set up automated backups
 
 ## 👥 Default Test Accounts
 
