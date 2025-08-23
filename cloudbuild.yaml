@@ -1,0 +1,103 @@
+# Google Cloud Build Configuration for AirSight
+# This file defines the build steps for deploying to Google Cloud Platform
+
+steps:
+  # Step 1: Build the Spring Boot application using Maven
+  - name: 'gcr.io/cloud-builders/mvn'
+    args: 
+      - 'clean'
+      - 'package'
+      - '-DskipTests'
+      - '-Pprod'
+    env:
+      - 'MAVEN_OPTS=-Xmx1024m'
+
+  # Step 2: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/airsight:$BUILD_ID'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/airsight:latest'
+      - '.'
+
+  # Step 3: Push Docker image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/airsight:$BUILD_ID'
+
+  # Step 4: Push latest tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/airsight:latest'
+
+  # Step 5: Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'airsight-app'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/airsight:$BUILD_ID'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '10'
+      - '--min-instances'
+      - '1'
+      - '--timeout'
+      - '300s'
+      - '--concurrency'
+      - '100'
+      - '--set-env-vars'
+      - 'SPRING_PROFILES_ACTIVE=prod'
+      - '--set-env-vars'
+      - 'SPRING_DATASOURCE_URL=${_DATABASE_URL}'
+      - '--set-env-vars'
+      - 'SPRING_DATASOURCE_USERNAME=${_DB_USERNAME}'
+      - '--set-env-vars'
+      - 'SPRING_DATASOURCE_PASSWORD=${_DB_PASSWORD}'
+      - '--set-env-vars'
+      - 'OPENAQ_API_KEY=${_OPENAQ_API_KEY}'
+      - '--set-env-vars'
+      - 'TWILIO_ACCOUNT_SID=${_TWILIO_ACCOUNT_SID}'
+      - '--set-env-vars'
+      - 'TWILIO_AUTH_TOKEN=${_TWILIO_AUTH_TOKEN}'
+      - '--set-env-vars'
+      - 'TWILIO_PHONE_NUMBER=${_TWILIO_PHONE_NUMBER}'
+
+# Build configuration
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: '100'
+
+# Timeout for the entire build
+timeout: '1200s'
+
+# Environment variables that can be set when triggering the build
+substitutions:
+  _DATABASE_URL: 'jdbc:mysql://MYSQL_IP:3306/airqualitydb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
+  _DB_USERNAME: 'airsight_user'
+  _DB_PASSWORD: 'your_secure_password_here'
+  _OPENAQ_API_KEY: 'your_openaq_api_key_here'
+  _TWILIO_ACCOUNT_SID: 'your_twilio_sid_here'
+  _TWILIO_AUTH_TOKEN: 'your_twilio_token_here'
+  _TWILIO_PHONE_NUMBER: 'your_twilio_phone_here'
+
+# Specify what images to build
+images:
+  - 'gcr.io/$PROJECT_ID/airsight:$BUILD_ID'
+  - 'gcr.io/$PROJECT_ID/airsight:latest'

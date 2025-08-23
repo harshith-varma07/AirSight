@@ -1,0 +1,58 @@
+# Google App Engine Configuration for AirSight
+# Alternative deployment option to Cloud Run
+
+runtime: java17
+
+env_variables:
+  SPRING_PROFILES_ACTIVE: "prod"
+  # Database configuration (use Cloud SQL)
+  SPRING_DATASOURCE_URL: "jdbc:mysql://google/airqualitydb?cloudSqlInstance=YOUR_PROJECT_ID:us-central1:airsight-db&socketFactory=com.google.cloud.sql.mysql.SocketFactory&useSSL=false"
+  SPRING_DATASOURCE_USERNAME: "airsight_user"
+  SPRING_DATASOURCE_PASSWORD: "your_secure_password"
+  
+  # External API keys (set these in GCP Secret Manager)
+  OPENAQ_API_KEY: "your_openaq_api_key"
+  TWILIO_ACCOUNT_SID: "your_twilio_sid"
+  TWILIO_AUTH_TOKEN: "your_twilio_token" 
+  TWILIO_PHONE_NUMBER: "your_twilio_phone"
+  
+  # Application settings
+  SERVER_PORT: "8080"
+  JAVA_OPTS: "-Xms512m -Xmx1g"
+
+# Resource allocation
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.8
+  target_throughput_utilization: 0.8
+
+# Health check configuration
+readiness_check:
+  path: "/actuator/health"
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+
+liveness_check:
+  path: "/actuator/health"
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 4
+  success_threshold: 2
+
+# Network configuration
+network:
+  forwarded_ports:
+    - 8080
+
+# Static file handling (for frontend assets)
+handlers:
+  - url: /static
+    static_dir: frontend
+    secure: always
+  
+  - url: /.*
+    script: auto
+    secure: always
